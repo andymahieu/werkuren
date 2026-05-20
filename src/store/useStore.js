@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 const isProd = window.location.hostname !== 'localhost';
-const API = isProd ? '/demo/Werkuren/api.php' : 'http://localhost:3001/api';
+const API = isProd ? './api.php' : 'http://localhost:3001/api';
 
 function getToken() {
     return localStorage.getItem('wt');

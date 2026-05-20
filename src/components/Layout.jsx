@@ -109,8 +109,8 @@ export default function Layout() {
                     </div>
                 </header>
                 
-                <div className="flex-1 overflow-auto p-4 md:p-8">
-                    <div className="max-w-7xl mx-auto w-full">
+                <div className={`flex-1 p-4 md:p-8 min-h-0 ${location.pathname === '/' || location.pathname === '/maand' ? 'overflow-hidden flex flex-col h-full' : 'overflow-auto'}`}>
+                    <div className={`max-w-7xl mx-auto w-full ${location.pathname === '/' || location.pathname === '/maand' ? 'flex-1 flex flex-col min-h-0' : ''}`}>
                         <Outlet />
                     </div>
                 </div>
