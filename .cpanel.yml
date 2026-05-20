@@ -1,0 +1,14 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/isandybe/public_html/demo/Werkuren/
+    - cp $DEPLOYPATH/api.php $DEPLOYPATH/api_live.php || true
+    - cp $DEPLOYPATH/db.php $DEPLOYPATH/db_live.php || true
+    - cp $DEPLOYPATH/db.sqlite $DEPLOYPATH/db_sqlite_live.db || true
+    - npm install
+    - npm run build
+    - /bin/cp -R dist/* $DEPLOYPATH
+    - cp $DEPLOYPATH/api_live.php $DEPLOYPATH/api.php || true
+    - cp $DEPLOYPATH/db_live.php $DEPLOYPATH/db.php || true
+    - cp $DEPLOYPATH/db_sqlite_live.db $DEPLOYPATH/db.sqlite || true
+    - rm -f $DEPLOYPATH/api_live.php $DEPLOYPATH/db_live.php $DEPLOYPATH/db_sqlite_live.db
