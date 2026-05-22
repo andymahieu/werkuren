@@ -338,22 +338,24 @@ export default function WeekCalendar() {
                             <Input type="date" id="date" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} className="col-span-3" />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right">Van</Label>
-                            <Select value={formData.start} onValueChange={v => setFormData({ ...formData, start: v })}>
-                                <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {TIME_SLOTS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                            <Label htmlFor="start" className="text-right">Van</Label>
+                            <Input 
+                                type="time" 
+                                id="start" 
+                                value={formData.start} 
+                                onChange={e => setFormData({ ...formData, start: e.target.value })} 
+                                className="col-span-3" 
+                            />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right">Tot</Label>
-                            <Select value={formData.end} onValueChange={v => setFormData({ ...formData, end: v })}>
-                                <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {TIME_SLOTS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                            <Label htmlFor="end" className="text-right">Tot</Label>
+                            <Input 
+                                type="time" 
+                                id="end" 
+                                value={formData.end} 
+                                onChange={e => setFormData({ ...formData, end: e.target.value })} 
+                                className="col-span-3" 
+                            />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label className="text-right">Type</Label>
