@@ -2,6 +2,7 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/isandybe/public_html/werkuren/
+    - /bin/mkdir -p $DEPLOYPATH
     - cp $DEPLOYPATH/db.php $DEPLOYPATH/db_live.php || true
     - /bin/cp -R dist/* $DEPLOYPATH
     - cp $DEPLOYPATH/db_live.php $DEPLOYPATH/db.php || true
