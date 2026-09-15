@@ -213,8 +213,8 @@ export default function WeekCalendar() {
             </div>
 
             {/* CALENDAR BODY */}
-            <div className="flex-1 overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-auto">
+            <div className="flex-1 relative min-h-0">
+                <div className="absolute inset-0 overflow-auto">
                     {/* Unified Width Container */}
                     <div className="min-w-[700px]">
                         {/* Day Headers */}
