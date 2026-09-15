@@ -13,7 +13,7 @@ import {
 import { nl } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Plus, Copy } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { ScrollArea } from '../components/ui/scroll-area';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
@@ -214,7 +214,7 @@ export default function WeekCalendar() {
 
             {/* CALENDAR BODY */}
             <div className="flex-1 overflow-hidden flex flex-col">
-                <ScrollArea className="flex-1" dir="ltr">
+                <div className="flex-1 overflow-auto">
                     {/* Unified Width Container */}
                     <div className="min-w-[700px]">
                         {/* Day Headers */}
@@ -324,7 +324,7 @@ export default function WeekCalendar() {
                         })}
                         </div>
                     </div>
-                </ScrollArea>
+                </div>
             </div>
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
