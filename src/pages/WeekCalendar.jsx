@@ -341,21 +341,37 @@ export default function WeekCalendar() {
                             <Label htmlFor="start" className="text-right">Van</Label>
                             <Input 
                                 type="time" 
-                                id="start" 
+                                id="start-mobile" 
                                 value={formData.start} 
                                 onChange={e => setFormData({ ...formData, start: e.target.value })} 
-                                className="col-span-3" 
+                                className="col-span-3 md:hidden block" 
                             />
+                            <div className="col-span-3 hidden md:block">
+                                <Select value={formData.start} onValueChange={v => setFormData({ ...formData, start: v })}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {TIME_SLOTS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="end" className="text-right">Tot</Label>
                             <Input 
                                 type="time" 
-                                id="end" 
+                                id="end-mobile" 
                                 value={formData.end} 
                                 onChange={e => setFormData({ ...formData, end: e.target.value })} 
-                                className="col-span-3" 
+                                className="col-span-3 md:hidden block" 
                             />
+                            <div className="col-span-3 hidden md:block">
+                                <Select value={formData.end} onValueChange={v => setFormData({ ...formData, end: v })}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {TIME_SLOTS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label className="text-right">Type</Label>
