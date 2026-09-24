@@ -2,11 +2,12 @@ import { useStore } from '../store/useStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { useMemo } from 'react';
 
-const generateTimeOptions = () => {
+export const generateTimeOptions = (step = 30) => {
     const options = [];
     for (let i = 0; i < 24; i++) {
-        for (let j = 0; j < 60; j += 30) {
+        for (let j = 0; j < 60; j += step) {
             const hour = i.toString().padStart(2, '0');
             const minute = j.toString().padStart(2, '0');
             options.push(`${hour}:${minute}`);
@@ -15,15 +16,15 @@ const generateTimeOptions = () => {
     return options;
 };
 
-const TIME_OPTIONS = generateTimeOptions();
-
 const DAY_LABELS = [
     'Maandag (Week 1)', 'Dinsdag (Week 1)', 'Woensdag (Week 1)', 'Donderdag (Week 1)', 'Vrijdag (Week 1)', 'Zaterdag (Week 1)', 'Zondag (Week 1)',
     'Maandag (Week 2)', 'Dinsdag (Week 2)', 'Woensdag (Week 2)', 'Donderdag (Week 2)', 'Vrijdag (Week 2)', 'Zaterdag (Week 2)', 'Zondag (Week 2)'
 ];
 
 export default function Settings() {
-    const { baseSchedule, updateBaseSchedule, employeeStartDate, setEmployeeStartDate, country, setCountry } = useStore();
+    const { baseSchedule, updateBaseSchedule, employeeStartDate, setEmployeeStartDate, country, setCountry, timeStep, setTimeStep } = useStore();
+
+    const TIME_OPTIONS = useMemo(() => generateTimeOptions(timeStep || 30), [timeStep]);
 
     const handleToggleActive = (index) => {
         const current = baseSchedule[index];
@@ -80,6 +81,24 @@ export default function Settings() {
                                 <option value="FR">Frankrijk</option>
                                 <option value="LU">Luxemburg</option>
                             </select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="timestep">Tijdseenheid (minuten)</Label>
+                            <select
+                                id="timestep"
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                value={timeStep || 30}
+                                onChange={(e) => setTimeStep(Number(e.target.value))}
+                            >
+                                <option value={5}>5 minuten</option>
+                                <option value={10}>10 minuten</option>
+                                <option value={15}>15 minuten</option>
+                                <option value={30}>30 minuten</option>
+                                <option value={60}>60 minuten</option>
+                            </select>
+                            <p className="text-xs text-muted-foreground">
+                                Bepaalt de kleinste stap in de kalender en menu's.
+                            </p>
                         </div>
                     </div>
                 </CardContent>

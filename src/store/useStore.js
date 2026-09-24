@@ -32,12 +32,14 @@ export const useStore = create((set, get) => ({
         const settings = await settingsRes.json();
         
         const country = settings.country || 'BE';
+        const timeStep = settings.timeStep || 30;
         set({
             registrations,
             baseSchedule,
             overtimeBalance: settings.overtimeBalance,
             employeeStartDate: settings.employeeStartDate,
             country: country,
+            timeStep: timeStep,
             loaded: true,
         });
 
@@ -107,7 +109,7 @@ export const useStore = create((set, get) => ({
         set(state => {
             fetch(`${API}/settings`, {
                 method: 'PUT', headers: authHeaders(),
-                body: JSON.stringify({ overtimeBalance: safeBalance, employeeStartDate: state.employeeStartDate, country: state.country }),
+                body: JSON.stringify({ overtimeBalance: safeBalance, employeeStartDate: state.employeeStartDate, country: state.country, timeStep: state.timeStep }),
             });
             return { overtimeBalance: safeBalance };
         });
@@ -117,7 +119,7 @@ export const useStore = create((set, get) => ({
         set(state => {
             fetch(`${API}/settings`, {
                 method: 'PUT', headers: authHeaders(),
-                body: JSON.stringify({ overtimeBalance: state.overtimeBalance, employeeStartDate: date, country: state.country }),
+                body: JSON.stringify({ overtimeBalance: state.overtimeBalance, employeeStartDate: date, country: state.country, timeStep: state.timeStep }),
             });
             return { employeeStartDate: date };
         });
@@ -127,7 +129,7 @@ export const useStore = create((set, get) => ({
         set(state => {
             fetch(`${API}/settings`, {
                 method: 'PUT', headers: authHeaders(),
-                body: JSON.stringify({ overtimeBalance: state.overtimeBalance, employeeStartDate: state.employeeStartDate, country }),
+                body: JSON.stringify({ overtimeBalance: state.overtimeBalance, employeeStartDate: state.employeeStartDate, country, timeStep: state.timeStep }),
             });
             return { country };
         });
@@ -139,12 +141,22 @@ export const useStore = create((set, get) => ({
             const newBalance = state.overtimeBalance + hours;
             fetch(`${API}/settings`, {
                 method: 'PUT', headers: authHeaders(),
-                body: JSON.stringify({ overtimeBalance: newBalance, employeeStartDate: state.employeeStartDate, country: state.country }),
+                body: JSON.stringify({ overtimeBalance: newBalance, employeeStartDate: state.employeeStartDate, country: state.country, timeStep: state.timeStep }),
             });
             return { overtimeBalance: newBalance };
         });
     },
 
+    setTimeStep: async (timeStep) => {
+        set(state => {
+            fetch(`${API}/settings`, {
+                method: 'PUT', headers: authHeaders(),
+                body: JSON.stringify({ overtimeBalance: state.overtimeBalance, employeeStartDate: state.employeeStartDate, country: state.country, timeStep }),
+            });
+            return { timeStep };
+        });
+    },
+
     // Reset store on logout
-    reset: () => set({ registrations: [], baseSchedule: [], overtimeBalance: 0, employeeStartDate: '', country: 'BE', holidays: [], loaded: false }),
+    reset: () => set({ registrations: [], baseSchedule: [], overtimeBalance: 0, employeeStartDate: '', country: 'BE', timeStep: 30, holidays: [], loaded: false }),
 }));

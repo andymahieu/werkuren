@@ -46,8 +46,13 @@ db.exec(`
         overtime_balance REAL NOT NULL DEFAULT 0,
         employee_start_date TEXT NOT NULL DEFAULT '',
         country TEXT NOT NULL DEFAULT 'BE',
+        time_step INTEGER DEFAULT 30,
         FOREIGN KEY (user_id) REFERENCES users(id)
     );
 `);
+
+try {
+    db.exec(`ALTER TABLE settings ADD COLUMN time_step INTEGER DEFAULT 30;`);
+} catch (err) {}
 
 export default db;

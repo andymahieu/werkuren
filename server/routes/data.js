@@ -91,20 +91,22 @@ router.get('/settings', auth, (req, res) => {
     res.json({ 
         overtimeBalance: row?.overtime_balance ?? 0, 
         employeeStartDate: row?.employee_start_date ?? '',
-        country: row?.country ?? 'BE'
+        country: row?.country ?? 'BE',
+        timeStep: row?.time_step ?? 30
     });
 });
 
 router.put('/settings', auth, (req, res) => {
-    const { overtimeBalance, employeeStartDate, country } = req.body;
+    const { overtimeBalance, employeeStartDate, country, timeStep } = req.body;
     db.prepare(`
-        INSERT INTO settings (user_id, overtime_balance, employee_start_date, country)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO settings (user_id, overtime_balance, employee_start_date, country, time_step)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET 
             overtime_balance=excluded.overtime_balance, 
             employee_start_date=excluded.employee_start_date,
-            country=excluded.country
-    `).run(req.user.id, overtimeBalance ?? 0, employeeStartDate ?? '', country ?? 'BE');
+            country=excluded.country,
+            time_step=excluded.time_step
+    `).run(req.user.id, overtimeBalance ?? 0, employeeStartDate ?? '', country ?? 'BE', timeStep ?? 30);
     res.json({ ok: true });
 });
 

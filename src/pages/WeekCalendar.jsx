@@ -19,16 +19,16 @@ import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
-const TIME_SLOTS = Array.from({ length: 48 }, (_, i) => {
-    const hour = Math.floor(i / 2).toString().padStart(2, '0');
-    const min = (i % 2 === 0) ? '00' : '30';
-    return `${hour}:${min}`;
-});
+import { generateTimeOptions } from './Settings';
 
 export default function WeekCalendar() {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const { registrations, baseSchedule, holidays, addRegistration, addRegistrations, updateRegistration, deleteRegistration } = useStore();
+    const { registrations, baseSchedule, holidays, addRegistration, addRegistrations, updateRegistration, deleteRegistration, timeStep } = useStore();
     const [autoFilledWeeks, setAutoFilledWeeks] = useState(new Set());
+    
+    const TIME_SLOTS = useMemo(() => generateTimeOptions(timeStep || 30), [timeStep]);
+    const pixelsPerMinute = 1.6; // 48px for 30mins
+    const slotHeight = (timeStep || 30) * pixelsPerMinute;
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState(null);
@@ -163,11 +163,11 @@ export default function WeekCalendar() {
         }
     };
 
-    // Helper to place items correctly. Very basic fixed heights.
+    // Helper to place items correctly.
     // We'll use absolute positioning in each column
     const getSlotPosition = (time) => {
         const [h, m] = time.split(':').map(Number);
-        return (h * 60 + m) / 30; // index out of 48 slots
+        return (h * 60 + m) / (timeStep || 30);
     };
 
     const getTypeStyle = (type) => {
@@ -251,8 +251,8 @@ export default function WeekCalendar() {
                             {/* Time Labels */}
                             <div className="border-r dark:border-slate-800 bg-white dark:bg-slate-900">
                                 {TIME_SLOTS.filter(t => parseInt(t.split(':')[0]) >= 6 && parseInt(t.split(':')[0]) <= 17).map((time, i) => (
-                                    <div key={i} className="h-12 border-b dark:border-slate-800 text-[10px] text-center p-1 text-slate-500">
-                                        {time.endsWith('00') ? time : ''}
+                                    <div key={i} className="border-b dark:border-slate-800 text-[10px] text-center text-slate-500 relative" style={{ height: `${slotHeight}px` }}>
+                                        {time.endsWith('00') && <span className="absolute top-0 left-0 right-0 -mt-2 bg-white dark:bg-slate-900">{time}</span>}
                                     </div>
                                 ))}
                             </div>
@@ -277,10 +277,11 @@ export default function WeekCalendar() {
                                         return (
                                             <div
                                                 key={i}
-                                                className={`h-12 border-b border-slate-100 dark:border-slate-800/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors ${ds.active && origIndex >= scheduleStartIdx && origIndex < scheduleEndIdx
+                                                className={`border-b border-slate-100 dark:border-slate-800/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors ${ds.active && origIndex >= scheduleStartIdx && origIndex < scheduleEndIdx
                                                     ? 'bg-slate-50/50 dark:bg-slate-800/30'
                                                     : ''
                                                     }`}
+                                                style={{ height: `${slotHeight}px` }}
                                                 onClick={() => handleSlotClick(day, time)}
                                             >
                                             </div>
@@ -294,18 +295,19 @@ export default function WeekCalendar() {
                                         if (startHour > 17 || parseInt(reg.end.split(':')[0]) < 6) return null;
 
                                         // Adjust start relative to 06:00
-                                        const startIdx = Math.max(0, getSlotPosition(reg.start) - 12); // -12 because 6 hours * 2 slots
+                                        const slotsPerHour = 60 / (timeStep || 30);
+                                        const startIdx = Math.max(0, getSlotPosition(reg.start) - (6 * slotsPerHour)); // - 6 hours
                                         const absoluteEndIdx = getSlotPosition(reg.end);
-                                        const endIdx = Math.min(24, absoluteEndIdx - 12); // Max 24 slots (12 hours * 2) after 06:00
+                                        const endIdx = Math.min(12 * slotsPerHour, absoluteEndIdx - (6 * slotsPerHour)); // Max 12 hours after 06:00
 
-                                        const height = (endIdx - startIdx) * 48; // 48px per slot (h-12)
+                                        const height = (endIdx - startIdx) * slotHeight;
 
                                         return (
                                             <div
                                                 key={reg.id}
                                                 className={`absolute left-1 right-1 rounded border overflow-hidden p-1 shadow-sm cursor-pointer hover:shadow-md transition-shadow ${getTypeStyle(reg.type)}`}
                                                 style={{
-                                                    top: `${startIdx * 48}px`,
+                                                    top: `${startIdx * slotHeight}px`,
                                                     height: `${height}px`,
                                                     zIndex: 10
                                                 }}
@@ -342,7 +344,8 @@ export default function WeekCalendar() {
                             <Input 
                                 type="time" 
                                 id="start-mobile" 
-                                value={formData.start} 
+                                value={formData.start}
+                                step={(timeStep || 30) * 60}
                                 onChange={e => setFormData({ ...formData, start: e.target.value })} 
                                 className="col-span-3 md:hidden block" 
                             />
@@ -360,7 +363,8 @@ export default function WeekCalendar() {
                             <Input 
                                 type="time" 
                                 id="end-mobile" 
-                                value={formData.end} 
+                                value={formData.end}
+                                step={(timeStep || 30) * 60}
                                 onChange={e => setFormData({ ...formData, end: e.target.value })} 
                                 className="col-span-3 md:hidden block" 
                             />

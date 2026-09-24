@@ -41,6 +41,7 @@
  *     overtime_balance FLOAT NOT NULL DEFAULT 0,
  *     employee_start_date VARCHAR(50) DEFAULT '',
  *     country VARCHAR(10) DEFAULT 'BE',
+ *     time_step INT DEFAULT 30,
  *     FOREIGN KEY (user_id) REFERENCES users(id)
  * );
  */
@@ -221,11 +222,17 @@ if ($path === '/settings') {
         echo json_encode([
             "overtimeBalance" => $r['overtime_balance'] ?? 0, 
             "employeeStartDate" => $r['employee_start_date'] ?? '',
-            "country" => $r['country'] ?? 'BE'
+            "country" => $r['country'] ?? 'BE',
+            "timeStep" => $r['time_step'] ?? 30
         ]);
     } elseif ($method === 'PUT') {
-        $pdo->prepare("UPDATE settings SET overtime_balance=?, employee_start_date=?, country=? WHERE user_id=?")
-            ->execute([$input['overtimeBalance'], $input['employeeStartDate'], $input['country'] ?? 'BE', $user['id']]);
+        // Zorg dat de kolom bestaat als deze oud is
+        try {
+            $pdo->exec("ALTER TABLE settings ADD COLUMN time_step INT DEFAULT 30");
+        } catch (PDOException $e) {}
+
+        $pdo->prepare("UPDATE settings SET overtime_balance=?, employee_start_date=?, country=?, time_step=? WHERE user_id=?")
+            ->execute([$input['overtimeBalance'], $input['employeeStartDate'], $input['country'] ?? 'BE', $input['timeStep'] ?? 30, $user['id']]);
         echo json_encode(["ok" => true]);
     }
     exit();
