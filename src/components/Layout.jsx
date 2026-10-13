@@ -15,12 +15,18 @@ export default function Layout() {
         logout();
     };
 
+    const isAdmin = user?.role === 'super_admin' || user?.role === 'entity_admin';
+
     const navigation = [
         { name: 'Weekkalender', href: '/', icon: Calendar },
         { name: 'Maandkalender', href: '/maand', icon: CalendarDays },
         { name: 'Rapportage', href: '/rapportage', icon: BarChart },
         { name: 'Instellingen', href: '/instellingen', icon: Settings },
     ];
+
+    if (isAdmin) {
+        navigation.push({ name: 'Admin Dashboard', href: '/admin', icon: User });
+    }
 
     const closeMenu = () => setIsMobileMenuOpen(false);
 

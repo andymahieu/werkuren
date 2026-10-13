@@ -8,6 +8,7 @@ import MonthCalendar from './pages/MonthCalendar';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import Admin from './pages/Admin';
 import { Calendar } from 'lucide-react';
 
 function AppRoutes() {
@@ -50,6 +51,7 @@ function AppRoutes() {
         <Route path="maand" element={<MonthCalendar />} />
         <Route path="rapportage" element={<Reports />} />
         <Route path="instellingen" element={<Settings />} />
+        <Route path="admin" element={<Admin />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

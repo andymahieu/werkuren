@@ -18,6 +18,14 @@ export const useStore = create((set, get) => ({
     employeeStartDate: '',
     country: 'BE',
     holidays: [],
+    entityTimeStep: 30,
+    allowDeviateTimeStep: false,
+    scheduleRotationWeeks: 2,
+    approvalRequired: 'none',
+    customRegistrationTypes: ['Werk', 'Pauze', 'Ziekte', 'Verlof'],
+    autoSplitOvertime: false,
+    defaultProjectId: null,
+    defaultSubjectId: null,
     loaded: false,
 
     // Load all data from API
@@ -33,6 +41,8 @@ export const useStore = create((set, get) => ({
         
         const country = settings.country || 'BE';
         const timeStep = settings.timeStep || 30;
+        const customRegistrationTypes = (settings.customRegistrationTypes || 'Werk,Pauze,Ziekte,Verlof').split(',').map(s => s.trim()).filter(Boolean);
+
         set({
             registrations,
             baseSchedule,
@@ -40,6 +50,14 @@ export const useStore = create((set, get) => ({
             employeeStartDate: settings.employeeStartDate,
             country: country,
             timeStep: timeStep,
+            entityTimeStep: settings.entityTimeStep || 30,
+            allowDeviateTimeStep: settings.allowDeviateTimeStep,
+            scheduleRotationWeeks: settings.scheduleRotationWeeks || 2,
+            approvalRequired: settings.approvalRequired || 'none',
+            customRegistrationTypes,
+            autoSplitOvertime: settings.autoSplitOvertime,
+            defaultProjectId: settings.defaultProjectId,
+            defaultSubjectId: settings.defaultSubjectId,
             loaded: true,
         });
 

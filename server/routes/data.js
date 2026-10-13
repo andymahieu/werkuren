@@ -87,12 +87,38 @@ router.put('/base-schedule/:dayIndex', auth, (req, res) => {
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
 
 router.get('/settings', auth, (req, res) => {
-    const row = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(req.user.id);
+    let r = db.prepare(`
+        SELECT s.*, e.time_step as e_time_step, e.allow_deviate_time_step, e.schedule_rotation_weeks, e.approval_required, e.custom_registration_types, e.auto_split_overtime 
+        FROM settings s 
+        LEFT JOIN users u ON s.user_id = u.id 
+        LEFT JOIN entity_settings e ON u.entity_id = e.entity_id 
+        WHERE s.user_id = ?
+    `).get(req.user.id);
+
+    if (!r) {
+        db.prepare('INSERT INTO settings (user_id) VALUES (?)').run(req.user.id);
+        r = db.prepare(`
+            SELECT s.*, e.time_step as e_time_step, e.allow_deviate_time_step, e.schedule_rotation_weeks, e.approval_required, e.custom_registration_types, e.auto_split_overtime 
+            FROM settings s 
+            LEFT JOIN users u ON s.user_id = u.id 
+            LEFT JOIN entity_settings e ON u.entity_id = e.entity_id 
+            WHERE s.user_id = ?
+        `).get(req.user.id);
+    }
+
     res.json({ 
-        overtimeBalance: row?.overtime_balance ?? 0, 
-        employeeStartDate: row?.employee_start_date ?? '',
-        country: row?.country ?? 'BE',
-        timeStep: row?.time_step ?? 30
+        overtimeBalance: r.overtime_balance ?? 0, 
+        employeeStartDate: r.employee_start_date ?? '',
+        country: r.country ?? 'BE',
+        timeStep: r.time_step ?? 30,
+        entityTimeStep: r.e_time_step ?? 30,
+        allowDeviateTimeStep: !!r.allow_deviate_time_step,
+        scheduleRotationWeeks: r.schedule_rotation_weeks ?? 2,
+        approvalRequired: r.approval_required ?? 'none',
+        customRegistrationTypes: r.custom_registration_types ?? 'Werk,Pauze,Ziekte,Verlof',
+        autoSplitOvertime: !!r.auto_split_overtime,
+        defaultProjectId: r.default_project_id,
+        defaultSubjectId: r.default_subject_id
     });
 });
 

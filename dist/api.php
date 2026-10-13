@@ -8,7 +8,50 @@
  *     id INT AUTO_INCREMENT PRIMARY KEY,
  *     username VARCHAR(255) UNIQUE NOT NULL,
  *     password_hash VARCHAR(255) NOT NULL,
+ *     role VARCHAR(50) DEFAULT 'user',
+ *     entity_id INT,
  *     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+ * );
+ * 
+ * CREATE TABLE IF NOT EXISTS companies (
+ *     id INT AUTO_INCREMENT PRIMARY KEY,
+ *     name VARCHAR(255) NOT NULL,
+ *     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+ * );
+ * 
+ * CREATE TABLE IF NOT EXISTS entities (
+ *     id INT AUTO_INCREMENT PRIMARY KEY,
+ *     company_id INT NOT NULL,
+ *     name VARCHAR(255) NOT NULL,
+ *     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ *     FOREIGN KEY (company_id) REFERENCES companies(id)
+ * );
+ * 
+ * CREATE TABLE IF NOT EXISTS entity_settings (
+ *     entity_id INT PRIMARY KEY,
+ *     time_step INT DEFAULT 30,
+ *     allow_deviate_time_step TINYINT(1) DEFAULT 0,
+ *     schedule_rotation_weeks INT DEFAULT 2,
+ *     approval_required VARCHAR(50) DEFAULT 'none',
+ *     custom_registration_types TEXT,
+ *     auto_split_overtime TINYINT(1) DEFAULT 0,
+ *     FOREIGN KEY (entity_id) REFERENCES entities(id)
+ * );
+ * 
+ * CREATE TABLE IF NOT EXISTS projects (
+ *     id INT AUTO_INCREMENT PRIMARY KEY,
+ *     entity_id INT NOT NULL,
+ *     name VARCHAR(255) NOT NULL,
+ *     is_active TINYINT(1) DEFAULT 1,
+ *     FOREIGN KEY (entity_id) REFERENCES entities(id)
+ * );
+ * 
+ * CREATE TABLE IF NOT EXISTS subjects (
+ *     id INT AUTO_INCREMENT PRIMARY KEY,
+ *     project_id INT NOT NULL,
+ *     name VARCHAR(255) NOT NULL,
+ *     is_active TINYINT(1) DEFAULT 1,
+ *     FOREIGN KEY (project_id) REFERENCES projects(id)
  * );
  * 
  * CREATE TABLE IF NOT EXISTS registrations (
@@ -19,6 +62,9 @@
  *     end TIME NOT NULL,
  *     type VARCHAR(50) NOT NULL DEFAULT 'werk',
  *     description TEXT,
+ *     project_id INT,
+ *     subject_id INT,
+ *     status VARCHAR(50) DEFAULT 'draft',
  *     FOREIGN KEY (user_id) REFERENCES users(id)
  * );
  * 
@@ -42,6 +88,8 @@
  *     employee_start_date VARCHAR(50) DEFAULT '',
  *     country VARCHAR(10) DEFAULT 'BE',
  *     time_step INT DEFAULT 30,
+ *     default_project_id INT,
+ *     default_subject_id INT,
  *     FOREIGN KEY (user_id) REFERENCES users(id)
  * );
  */
@@ -130,7 +178,7 @@ if ($path === '/auth/register' && $method === 'POST') {
     }
     $pdo->prepare("INSERT INTO settings (user_id) VALUES (?)")->execute([$userId]);
     
-    echo json_encode(["token" => createJWT($userId, $input['username'], $jwt_secret), "user" => ["id" => $userId, "username" => $input['username']]]);
+    echo json_encode(["token" => createJWT($userId, $input['username'], $jwt_secret), "user" => ["id" => $userId, "username" => $input['username'], "role" => "super_admin", "entity_id" => null]]);
     exit();
 }
 
@@ -139,7 +187,7 @@ if ($path === '/auth/login' && $method === 'POST') {
     $stmt->execute([$input['username']]);
     $user = $stmt->fetch();
     if ($user && password_verify($input['password'], $user['password_hash'])) {
-        echo json_encode(["token" => createJWT($user['id'], $user['username'], $jwt_secret), "user" => ["id" => $user['id'], "username" => $user['username']]]);
+        echo json_encode(["token" => createJWT($user['id'], $user['username'], $jwt_secret), "user" => ["id" => $user['id'], "username" => $user['username'], "role" => $user['role'], "entity_id" => $user['entity_id']]]);
     } else {
         http_response_code(401);
         echo json_encode(["error" => "Ongeldige gegevens"]);
@@ -216,14 +264,22 @@ if (preg_match('/^\/base-schedule\/(\d+)$/', $path, $m)) {
 
 if ($path === '/settings') {
     if ($method === 'GET') {
-        $stmt = $pdo->prepare("SELECT * FROM settings WHERE user_id = ?");
+        $stmt = $pdo->prepare("SELECT s.*, e.time_step as e_time_step, e.allow_deviate_time_step, e.schedule_rotation_weeks, e.approval_required, e.custom_registration_types, e.auto_split_overtime FROM settings s LEFT JOIN users u ON s.user_id = u.id LEFT JOIN entity_settings e ON u.entity_id = e.entity_id WHERE s.user_id = ?");
         $stmt->execute([$user['id']]);
         $r = $stmt->fetch();
         echo json_encode([
             "overtimeBalance" => $r['overtime_balance'] ?? 0, 
             "employeeStartDate" => $r['employee_start_date'] ?? '',
             "country" => $r['country'] ?? 'BE',
-            "timeStep" => $r['time_step'] ?? 30
+            "timeStep" => $r['time_step'] ?? 30,
+            "entityTimeStep" => $r['e_time_step'] ?? 30,
+            "allowDeviateTimeStep" => (bool)($r['allow_deviate_time_step'] ?? false),
+            "scheduleRotationWeeks" => $r['schedule_rotation_weeks'] ?? 2,
+            "approvalRequired" => $r['approval_required'] ?? 'none',
+            "customRegistrationTypes" => $r['custom_registration_types'] ?? 'Werk,Pauze,Ziekte,Verlof',
+            "autoSplitOvertime" => (bool)($r['auto_split_overtime'] ?? false),
+            "defaultProjectId" => $r['default_project_id'],
+            "defaultSubjectId" => $r['default_subject_id']
         ]);
     } elseif ($method === 'PUT') {
         // Zorg dat de kolom bestaat als deze oud is
@@ -236,4 +292,163 @@ if ($path === '/settings') {
         echo json_encode(["ok" => true]);
     }
     exit();
+}
+
+// 3. ADMIN & MULTI-TENANCY
+$isAdmin = isset($user['role']) && ($user['role'] === 'super_admin' || $user['role'] === 'entity_admin');
+$isSuperAdmin = isset($user['role']) && $user['role'] === 'super_admin';
+
+if (strpos($path, '/admin/') === 0) {
+    if (!$isAdmin) {
+        http_response_code(403);
+        die(json_encode(["error" => "Admin rechten vereist"]));
+    }
+
+    if ($path === '/admin/companies' && $isSuperAdmin) {
+        if ($method === 'GET') {
+            echo json_encode($pdo->query("SELECT * FROM companies")->fetchAll());
+        } elseif ($method === 'POST') {
+            $stmt = $pdo->prepare("INSERT INTO companies (name) VALUES (?)");
+            $stmt->execute([$input['name']]);
+            echo json_encode(["id" => $pdo->lastInsertId(), "name" => $input['name']]);
+        }
+        exit();
+    }
+
+    if ($path === '/admin/entities' && $isSuperAdmin) {
+        if ($method === 'GET') {
+            echo json_encode($pdo->query("SELECT e.*, c.name as company_name FROM entities e JOIN companies c ON e.company_id = c.id")->fetchAll());
+        } elseif ($method === 'POST') {
+            $stmt = $pdo->prepare("INSERT INTO entities (name, company_id) VALUES (?, ?)");
+            $stmt->execute([$input['name'], $input['company_id']]);
+            $id = $pdo->lastInsertId();
+            $pdo->prepare("INSERT INTO entity_settings (entity_id) VALUES (?)")->execute([$id]);
+            echo json_encode(["id" => $id, "name" => $input['name'], "company_id" => $input['company_id']]);
+        }
+        exit();
+    }
+
+    if ($path === '/admin/users') {
+        if ($method === 'GET') {
+            if ($isSuperAdmin) {
+                echo json_encode($pdo->query("SELECT id, username, role, entity_id, created_at FROM users")->fetchAll());
+            } else {
+                $stmt = $pdo->prepare("SELECT id, username, role, entity_id, created_at FROM users WHERE entity_id = ?");
+                $stmt->execute([$user['entity_id']]);
+                echo json_encode($stmt->fetchAll());
+            }
+        } elseif ($method === 'POST') {
+            $targetEntityId = $isSuperAdmin ? $input['entity_id'] : $user['entity_id'];
+            $targetRole = (!$isSuperAdmin && $input['role'] === 'super_admin') ? 'user' : ($input['role'] ?? 'user');
+            
+            try {
+                $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, role, entity_id) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$input['username'], password_hash($input['password'], PASSWORD_DEFAULT), $targetRole, $targetEntityId]);
+                $userId = $pdo->lastInsertId();
+                
+                // Defaults
+                for ($i = 0; $i < 14; $i++) {
+                    $isActive = ($i % 7) >= 0 && ($i % 7) <= 3 ? 1 : 0;
+                    $pdo->prepare("INSERT INTO base_schedule (user_id, day_index, active) VALUES (?, ?, ?)")
+                        ->execute([$userId, $i, $isActive]);
+                }
+                $pdo->prepare("INSERT INTO settings (user_id) VALUES (?)")->execute([$userId]);
+                
+                echo json_encode(["id" => $userId, "username" => $input['username'], "role" => $targetRole, "entity_id" => $targetEntityId]);
+            } catch(PDOException $e) {
+                http_response_code(400);
+                echo json_encode(["error" => "Fout bij aanmaken gebruiker (bestaat de naam al?)"]);
+            }
+        }
+        exit();
+    }
+
+    if ($path === '/admin/entity-settings') {
+        $targetEntityId = $isSuperAdmin ? ($_GET['entity_id'] ?? $input['entity_id']) : $user['entity_id'];
+        
+        if ($method === 'GET') {
+            $stmt = $pdo->prepare("SELECT * FROM entity_settings WHERE entity_id = ?");
+            $stmt->execute([$targetEntityId]);
+            $settings = $stmt->fetch();
+            if (!$settings) {
+                $pdo->prepare("INSERT INTO entity_settings (entity_id) VALUES (?)")->execute([$targetEntityId]);
+                $stmt->execute([$targetEntityId]);
+                $settings = $stmt->fetch();
+            }
+            echo json_encode($settings);
+        } elseif ($method === 'PUT') {
+            $stmt = $pdo->prepare("UPDATE entity_settings SET time_step=?, allow_deviate_time_step=?, schedule_rotation_weeks=?, approval_required=?, custom_registration_types=?, auto_split_overtime=? WHERE entity_id=?");
+            $stmt->execute([
+                $input['time_step'], 
+                $input['allow_deviate_time_step'] ? 1 : 0, 
+                $input['schedule_rotation_weeks'], 
+                $input['approval_required'], 
+                $input['custom_registration_types'],
+                $input['auto_split_overtime'] ? 1 : 0,
+                $targetEntityId
+            ]);
+            echo json_encode(["ok" => true]);
+        }
+        exit();
+    }
+
+    // ---- PROJECTS ----
+    if ($path === '/admin/projects') {
+        if ($method === 'GET') {
+            $entityId = $isSuperAdmin ? ($_GET['entity_id'] ?? null) : $user['entity_id'];
+            $stmt = $pdo->prepare("SELECT * FROM projects WHERE entity_id = ? ORDER BY name");
+            $stmt->execute([$entityId]);
+            echo json_encode($stmt->fetchAll());
+        } elseif ($method === 'POST') {
+            $entityId = $isSuperAdmin ? $input['entity_id'] : $user['entity_id'];
+            $stmt = $pdo->prepare("INSERT INTO projects (entity_id, name, is_active) VALUES (?, ?, 1)");
+            $stmt->execute([$entityId, $input['name']]);
+            echo json_encode(["id" => $pdo->lastInsertId(), "entity_id" => $entityId, "name" => $input['name'], "is_active" => 1]);
+        }
+        exit();
+    }
+
+    if (preg_match('/^\/admin\/projects\/(\d+)$/', $path, $m)) {
+        $projectId = $m[1];
+        if ($method === 'PUT') {
+            $pdo->prepare("UPDATE projects SET name=?, is_active=? WHERE id=?")->execute([$input['name'], $input['is_active'] ? 1 : 0, $projectId]);
+            echo json_encode(["ok" => true]);
+        } elseif ($method === 'DELETE') {
+            $pdo->prepare("DELETE FROM subjects WHERE project_id=?")->execute([$projectId]);
+            $pdo->prepare("DELETE FROM projects WHERE id=?")->execute([$projectId]);
+            echo json_encode(["ok" => true]);
+        }
+        exit();
+    }
+
+    // ---- SUBJECTS ----
+    if ($path === '/admin/subjects') {
+        if ($method === 'GET') {
+            if (isset($_GET['project_id'])) {
+                $stmt = $pdo->prepare("SELECT * FROM subjects WHERE project_id = ? ORDER BY name");
+                $stmt->execute([$_GET['project_id']]);
+            } else {
+                $stmt = $pdo->prepare("SELECT s.*, p.name as project_name FROM subjects s JOIN projects p ON s.project_id = p.id JOIN entities e ON p.entity_id = e.id WHERE e.id = ?");
+                $stmt->execute([$user['entity_id']]);
+            }
+            echo json_encode($stmt->fetchAll());
+        } elseif ($method === 'POST') {
+            $stmt = $pdo->prepare("INSERT INTO subjects (project_id, name, is_active) VALUES (?, ?, 1)");
+            $stmt->execute([$input['project_id'], $input['name']]);
+            echo json_encode(["id" => $pdo->lastInsertId(), "project_id" => $input['project_id'], "name" => $input['name'], "is_active" => 1]);
+        }
+        exit();
+    }
+
+    if (preg_match('/^\/admin\/subjects\/(\d+)$/', $path, $m)) {
+        $subjectId = $m[1];
+        if ($method === 'PUT') {
+            $pdo->prepare("UPDATE subjects SET name=?, is_active=? WHERE id=?")->execute([$input['name'], $input['is_active'] ? 1 : 0, $subjectId]);
+            echo json_encode(["ok" => true]);
+        } elseif ($method === 'DELETE') {
+            $pdo->prepare("DELETE FROM subjects WHERE id=?")->execute([$subjectId]);
+            echo json_encode(["ok" => true]);
+        }
+        exit();
+    }
 }

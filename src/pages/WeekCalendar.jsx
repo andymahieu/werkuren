@@ -23,7 +23,7 @@ import { generateTimeOptions } from './Settings';
 
 export default function WeekCalendar() {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const { registrations, baseSchedule, holidays, addRegistration, addRegistrations, updateRegistration, deleteRegistration, timeStep } = useStore();
+    const { registrations, baseSchedule, holidays, addRegistration, addRegistrations, updateRegistration, deleteRegistration, timeStep, customRegistrationTypes, autoSplitOvertime } = useStore();
     const [autoFilledWeeks, setAutoFilledWeeks] = useState(new Set());
     
     const TIME_SLOTS = useMemo(() => generateTimeOptions(timeStep || 30), [timeStep]);
@@ -148,11 +148,73 @@ export default function WeekCalendar() {
     };
 
     const saveEntry = () => {
-        if (selectedEntry) {
-            updateRegistration(selectedEntry.id, formData);
-        } else {
-            addRegistration(formData);
+        if (!autoSplitOvertime || formData.type.toLowerCase() !== 'werk') {
+            // No splitting needed — just save normally
+            if (selectedEntry) {
+                updateRegistration(selectedEntry.id, formData);
+            } else {
+                addRegistration(formData);
+            }
+            setIsDialogOpen(false);
+            return;
         }
+
+        // --- Auto-split overtime logic ---
+        const weekDay = new Date(formData.date).getDay(); // 0=Sun,1=Mon,...
+        // Adjust to 0=Mon index for baseSchedule
+        const dayOfWeek = weekDay === 0 ? 6 : weekDay - 1;
+        const baseScheduleIndex = isWeek2 ? dayOfWeek + 7 : dayOfWeek;
+        const ds = baseSchedule[baseScheduleIndex];
+
+        if (!ds || !ds.active) {
+            // Not a scheduled day -> entire block is overtime
+            if (selectedEntry) {
+                updateRegistration(selectedEntry.id, { ...formData, type: 'Overuur' });
+            } else {
+                addRegistration({ ...formData, type: 'Overuur' });
+            }
+            setIsDialogOpen(false);
+            return;
+        }
+
+        const toMinutes = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+        const toTime = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+        const regStart = toMinutes(formData.start);
+        const regEnd = toMinutes(formData.end);
+        const schedStart = toMinutes(ds.start);
+        const schedEnd = toMinutes(ds.end);
+
+        const segments = [];
+
+        // Before schedule start = overtime
+        if (regStart < schedStart) {
+            segments.push({ ...formData, start: toTime(regStart), end: toTime(Math.min(regEnd, schedStart)), type: 'Overuur' });
+        }
+        // Within schedule = work
+        if (regEnd > schedStart && regStart < schedEnd) {
+            segments.push({ ...formData, start: toTime(Math.max(regStart, schedStart)), end: toTime(Math.min(regEnd, schedEnd)), type: formData.type });
+        }
+        // After schedule end = overtime
+        if (regEnd > schedEnd) {
+            segments.push({ ...formData, start: toTime(Math.max(regStart, schedEnd)), end: toTime(regEnd), type: 'Overuur' });
+        }
+
+        if (segments.length === 1) {
+            // No split needed
+            if (selectedEntry) {
+                updateRegistration(selectedEntry.id, segments[0]);
+            } else {
+                addRegistration(segments[0]);
+            }
+        } else {
+            // Delete old if editing, then bulk-add all segments
+            if (selectedEntry) {
+                deleteRegistration(selectedEntry.id);
+            }
+            addRegistrations(segments);
+        }
+
         setIsDialogOpen(false);
     };
 
@@ -171,14 +233,25 @@ export default function WeekCalendar() {
     };
 
     const getTypeStyle = (type) => {
-        switch (type) {
+        const t = (type || '').toLowerCase();
+        switch (t) {
             case 'werk': return 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-700';
             case 'ziekte': return 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/50 dark:text-red-200 dark:border-red-700';
             case 'verlof': return 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/50 dark:text-green-200 dark:border-green-700';
             case 'pauze': return 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/50 dark:text-orange-200 dark:border-orange-700';
-            default: return 'bg-gray-100 text-gray-800 border-gray-300';
+            case 'overuur': return 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900/50 dark:text-purple-200 dark:border-purple-700';
+            default: return 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-700/50 dark:text-gray-200 dark:border-gray-600';
         }
     };
+
+    // Resolved registration type list (with Overuur auto-appended if auto-split is on)
+    const resolvedTypes = useMemo(() => {
+        const base = customRegistrationTypes?.length ? customRegistrationTypes : ['Werk', 'Pauze', 'Ziekte', 'Verlof'];
+        if (autoSplitOvertime && !base.some(t => t.toLowerCase() === 'overuur')) {
+            return [...base, 'Overuur'];
+        }
+        return base;
+    }, [customRegistrationTypes, autoSplitOvertime]);
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-slate-900 rounded-lg shadow border dark:border-slate-800 overflow-hidden">
@@ -378,14 +451,13 @@ export default function WeekCalendar() {
                             </div>
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right">Type</Label>
+                            <Label className="text-right font-bold">Type</Label>
                             <Select value={formData.type} onValueChange={v => setFormData({ ...formData, type: v })}>
-                                <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="col-span-3 h-14 text-lg font-semibold bg-slate-50 dark:bg-slate-800"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="werk">Werk</SelectItem>
-                                    <SelectItem value="pauze">Pauze</SelectItem>
-                                    <SelectItem value="ziekte">Ziekte</SelectItem>
-                                    <SelectItem value="verlof">Verlof</SelectItem>
+                                    {resolvedTypes.map(t => (
+                                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>

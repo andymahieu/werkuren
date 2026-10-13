@@ -38,10 +38,10 @@ router.post('/register', (req, res) => {
         return res.status(409).json({ error: 'Gebruikersnaam bestaat al.' });
     }
     const hash = bcrypt.hashSync(password, 10);
-    const result = db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run(username, hash);
+    const result = db.prepare('INSERT INTO users (username, password_hash, role, entity_id) VALUES (?, ?, ?, ?)').run(username, hash, 'super_admin', null);
     createDefaultSchedule(result.lastInsertRowid);
     const token = jwt.sign({ id: result.lastInsertRowid, username }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: result.lastInsertRowid, username } });
+    res.json({ token, user: { id: result.lastInsertRowid, username, role: 'super_admin', entity_id: null } });
 });
 
 // POST /api/auth/login
@@ -52,7 +52,7 @@ router.post('/login', (req, res) => {
         return res.status(401).json({ error: 'Ongeldige gebruikersnaam of wachtwoord.' });
     }
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user.id, username: user.username } });
+    res.json({ token, user: { id: user.id, username: user.username, role: user.role, entity_id: user.entity_id } });
 });
 
 export default router;
