@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
 const isProd = window.location.hostname !== 'localhost';
-const API = isProd ? '/demo/Werkuren/api.php' : 'http://localhost:3001/api';
+const API = isProd ? './api.php' : 'http://localhost:3001/api';
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);

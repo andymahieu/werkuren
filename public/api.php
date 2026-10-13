@@ -118,6 +118,101 @@ try {
     $pdo = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8", $db_user, $db_pass);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+    // Auto-create missing tables and columns
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(255) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            role VARCHAR(50) DEFAULT 'user',
+            entity_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS companies (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS entities (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            company_id INT NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS entity_settings (
+            entity_id INT PRIMARY KEY,
+            time_step INT DEFAULT 30,
+            allow_deviate_time_step TINYINT(1) DEFAULT 0,
+            schedule_rotation_weeks INT DEFAULT 2,
+            approval_required VARCHAR(50) DEFAULT 'none',
+            custom_registration_types TEXT,
+            auto_split_overtime TINYINT(1) DEFAULT 0,
+            allow_manual_split_overtime TINYINT(1) DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS projects (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            entity_id INT NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            is_active TINYINT(1) DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS subjects (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            is_active TINYINT(1) DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS registrations (
+            id VARCHAR(255) PRIMARY KEY,
+            user_id INT NOT NULL,
+            date DATE NOT NULL,
+            start TIME NOT NULL,
+            end TIME NOT NULL,
+            type VARCHAR(50) NOT NULL DEFAULT 'werk',
+            description TEXT,
+            project_id INT,
+            subject_id INT,
+            status VARCHAR(50) DEFAULT 'draft'
+        );
+        CREATE TABLE IF NOT EXISTS base_schedule (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            day_index INT NOT NULL,
+            active TINYINT(1) NOT NULL DEFAULT 1,
+            start TIME NOT NULL DEFAULT '08:00',
+            end TIME NOT NULL DEFAULT '15:30',
+            has_break TINYINT(1) NOT NULL DEFAULT 1,
+            break_start TIME NOT NULL DEFAULT '12:00',
+            break_end TIME NOT NULL DEFAULT '12:30',
+            UNIQUE(user_id, day_index)
+        );
+        CREATE TABLE IF NOT EXISTS settings (
+            user_id INT PRIMARY KEY,
+            overtime_balance FLOAT NOT NULL DEFAULT 0,
+            employee_start_date VARCHAR(50) DEFAULT '',
+            country VARCHAR(10) DEFAULT 'BE',
+            time_step INT DEFAULT 30,
+            default_project_id INT,
+            default_subject_id INT
+        );
+    ");
+
+    $cols = [
+        "ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'user'",
+        "ALTER TABLE users ADD COLUMN entity_id INT",
+        "ALTER TABLE registrations ADD COLUMN project_id INT",
+        "ALTER TABLE registrations ADD COLUMN subject_id INT",
+        "ALTER TABLE registrations ADD COLUMN status VARCHAR(50) DEFAULT 'draft'",
+        "ALTER TABLE settings ADD COLUMN time_step INT DEFAULT 30",
+        "ALTER TABLE settings ADD COLUMN default_project_id INT",
+        "ALTER TABLE settings ADD COLUMN default_subject_id INT",
+        "ALTER TABLE entity_settings ADD COLUMN custom_registration_types TEXT",
+        "ALTER TABLE entity_settings ADD COLUMN auto_split_overtime TINYINT(1) DEFAULT 0",
+        "ALTER TABLE entity_settings ADD COLUMN allow_manual_split_overtime TINYINT(1) DEFAULT 1"
+    ];
+    foreach ($cols as $sql) {
+        try { $pdo->exec($sql); } catch (Exception $e) {}
+    }
 } catch (PDOException $e) {
     die(json_encode(["error" => "Database verbinding mislukt: " . $e->getMessage()]));
 }
@@ -268,6 +363,11 @@ if ($path === '/settings') {
         $stmt = $pdo->prepare("SELECT s.*, e.time_step as e_time_step, e.allow_deviate_time_step, e.schedule_rotation_weeks, e.approval_required, e.custom_registration_types, e.auto_split_overtime, e.allow_manual_split_overtime FROM settings s LEFT JOIN users u ON s.user_id = u.id LEFT JOIN entity_settings e ON u.entity_id = e.entity_id WHERE s.user_id = ?");
         $stmt->execute([$user['id']]);
         $r = $stmt->fetch();
+        if (!$r) {
+            $pdo->prepare("INSERT IGNORE INTO settings (user_id) VALUES (?)")->execute([$user['id']]);
+            $stmt->execute([$user['id']]);
+            $r = $stmt->fetch() ?: [];
+        }
         echo json_encode([
             "overtimeBalance" => $r['overtime_balance'] ?? 0, 
             "employeeStartDate" => $r['employee_start_date'] ?? '',
@@ -280,8 +380,8 @@ if ($path === '/settings') {
             "customRegistrationTypes" => $r['custom_registration_types'] ?? 'Werk,Pauze,Ziekte,Verlof',
             "autoSplitOvertime" => (bool)($r['auto_split_overtime'] ?? false),
             "allowManualSplitOvertime" => isset($r['allow_manual_split_overtime']) ? (bool)$r['allow_manual_split_overtime'] : true,
-            "defaultProjectId" => $r['default_project_id'],
-            "defaultSubjectId" => $r['default_subject_id']
+            "defaultProjectId" => $r['default_project_id'] ?? null,
+            "defaultSubjectId" => $r['default_subject_id'] ?? null
         ]);
     } elseif ($method === 'PUT') {
         // Zorg dat de kolom bestaat als deze oud is

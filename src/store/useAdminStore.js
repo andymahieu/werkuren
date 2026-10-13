@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { useStore } from './useStore';
 
-const API = import.meta.env.PROD ? 'https://www.isandy.be/werkuren/api.php' : 'http://localhost:3001/api';
+const isProd = window.location.hostname !== 'localhost';
+const API = isProd ? './api.php' : 'http://localhost:3001/api';
 
 const authHeaders = () => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('wt');
     return {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`

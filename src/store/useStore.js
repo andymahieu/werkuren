@@ -31,40 +31,55 @@ export const useStore = create((set, get) => ({
 
     // Load all data from API
     loadAll: async () => {
-        const [regsRes, schedRes, settingsRes] = await Promise.all([
-            fetch(`${API}/registrations`, { headers: authHeaders() }),
-            fetch(`${API}/base-schedule`, { headers: authHeaders() }),
-            fetch(`${API}/settings`, { headers: authHeaders() }),
-        ]);
-        const registrations = await regsRes.json();
-        const baseSchedule = await schedRes.json();
-        const settings = await settingsRes.json();
-        
-        const country = settings.country || 'BE';
-        const timeStep = settings.timeStep || 30;
-        const customRegistrationTypes = (settings.customRegistrationTypes || 'Werk,Pauze,Ziekte,Verlof').split(',').map(s => s.trim()).filter(Boolean);
+        try {
+            const [regsRes, schedRes, settingsRes] = await Promise.all([
+                fetch(`${API}/registrations`, { headers: authHeaders() }),
+                fetch(`${API}/base-schedule`, { headers: authHeaders() }),
+                fetch(`${API}/settings`, { headers: authHeaders() }),
+            ]);
 
-        set({
-            registrations,
-            baseSchedule,
-            overtimeBalance: settings.overtimeBalance,
-            employeeStartDate: settings.employeeStartDate,
-            country: country,
-            timeStep: timeStep,
-            entityTimeStep: settings.entityTimeStep || 30,
-            allowDeviateTimeStep: settings.allowDeviateTimeStep,
-            scheduleRotationWeeks: settings.scheduleRotationWeeks || 2,
-            approvalRequired: settings.approvalRequired || 'none',
-            customRegistrationTypes,
-            autoSplitOvertime: settings.autoSplitOvertime,
-            allowManualSplitOvertime: settings.allowManualSplitOvertime !== undefined ? settings.allowManualSplitOvertime : true,
-            defaultProjectId: settings.defaultProjectId,
-            defaultSubjectId: settings.defaultSubjectId,
-            loaded: true,
-        });
+            if (regsRes.status === 401 || schedRes.status === 401 || settingsRes.status === 401) {
+                // Token expired or invalid
+                localStorage.removeItem('wt');
+                localStorage.removeItem('wu');
+                window.location.reload();
+                return;
+            }
 
-        // Fetch holidays after setting country
-        get().fetchHolidays(country);
+            const registrations = regsRes.ok ? await regsRes.json() : [];
+            const baseSchedule = schedRes.ok ? await schedRes.json() : [];
+            const settings = settingsRes.ok ? await settingsRes.json() : {};
+            
+            const country = settings.country || 'BE';
+            const timeStep = settings.timeStep || 30;
+            const customRegistrationTypes = (settings.customRegistrationTypes || 'Werk,Pauze,Ziekte,Verlof').split(',').map(s => s.trim()).filter(Boolean);
+
+            set({
+                registrations: Array.isArray(registrations) ? registrations : [],
+                baseSchedule: Array.isArray(baseSchedule) ? baseSchedule : [],
+                overtimeBalance: settings.overtimeBalance ?? 0,
+                employeeStartDate: settings.employeeStartDate ?? '',
+                country: country,
+                timeStep: timeStep,
+                entityTimeStep: settings.entityTimeStep || 30,
+                allowDeviateTimeStep: !!settings.allowDeviateTimeStep,
+                scheduleRotationWeeks: settings.scheduleRotationWeeks || 2,
+                approvalRequired: settings.approvalRequired || 'none',
+                customRegistrationTypes,
+                autoSplitOvertime: !!settings.autoSplitOvertime,
+                allowManualSplitOvertime: settings.allowManualSplitOvertime !== undefined ? !!settings.allowManualSplitOvertime : true,
+                defaultProjectId: settings.defaultProjectId,
+                defaultSubjectId: settings.defaultSubjectId,
+                loaded: true,
+            });
+
+            // Fetch holidays after setting country
+            get().fetchHolidays(country);
+        } catch (err) {
+            console.error("Fout bij laden van data:", err);
+            // Zorg dat we niet oneindig blijven hangen op 'Data laden...'
+            set({ loaded: true });
+        }
     },
 
     fetchHolidays: async (country) => {
