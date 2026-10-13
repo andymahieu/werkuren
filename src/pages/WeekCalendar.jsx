@@ -11,7 +11,7 @@ import {
     parseISO,
 } from 'date-fns';
 import { nl } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Plus, Copy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Copy, Split } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '../components/ui/dialog';
@@ -23,7 +23,7 @@ import { generateTimeOptions } from './Settings';
 
 export default function WeekCalendar() {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const { registrations, baseSchedule, holidays, addRegistration, addRegistrations, updateRegistration, deleteRegistration, timeStep, customRegistrationTypes, autoSplitOvertime } = useStore();
+    const { registrations, baseSchedule, holidays, addRegistration, addRegistrations, updateRegistration, deleteRegistration, timeStep, customRegistrationTypes, autoSplitOvertime, allowManualSplitOvertime } = useStore();
     const [autoFilledWeeks, setAutoFilledWeeks] = useState(new Set());
     
     const TIME_SLOTS = useMemo(() => generateTimeOptions(timeStep || 30), [timeStep]);
@@ -116,6 +116,72 @@ export default function WeekCalendar() {
             addRegistrations(newRegs);
         } else {
             alert('Er zijn al uren ingevuld of er zijn geen actieve dagen in het basisrooster voor deze week.');
+        }
+    };
+
+    const handleSplitDayOvertime = (day, dIndex) => {
+        const dateStr = format(day, 'yyyy-MM-dd');
+        const dayRegs = registrations.filter(r => r.date === dateStr);
+        if (dayRegs.length === 0) {
+            alert('Geen registraties op deze dag om op te splitsen.');
+            return;
+        }
+
+        const baseScheduleIndex = isWeek2 ? dIndex + 7 : dIndex;
+        const ds = baseSchedule[baseScheduleIndex];
+
+        const toMinutes = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+        const toTime = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+        let modified = false;
+        const toDelete = [];
+        const toAdd = [];
+
+        dayRegs.forEach(reg => {
+            if ((reg.type || '').toLowerCase() !== 'werk') return;
+
+            if (!ds || !ds.active) {
+                // Hele registratie is overuur
+                toDelete.push(reg.id);
+                toAdd.push({ ...reg, type: 'Overuur' });
+                modified = true;
+                return;
+            }
+
+            const regStart = toMinutes(reg.start);
+            const regEnd = toMinutes(reg.end);
+            const schedStart = toMinutes(ds.start);
+            const schedEnd = toMinutes(ds.end);
+
+            const segments = [];
+            if (regStart < schedStart) {
+                segments.push({ ...reg, start: toTime(regStart), end: toTime(Math.min(regEnd, schedStart)), type: 'Overuur' });
+            }
+            if (regEnd > schedStart && regStart < schedEnd) {
+                segments.push({ ...reg, start: toTime(Math.max(regStart, schedStart)), end: toTime(Math.min(regEnd, schedEnd)), type: reg.type });
+            }
+            if (regEnd > schedEnd) {
+                segments.push({ ...reg, start: toTime(Math.max(regStart, schedEnd)), end: toTime(regEnd), type: 'Overuur' });
+            }
+
+            if (segments.length > 1 || (segments.length === 1 && segments[0].type !== reg.type)) {
+                toDelete.push(reg.id);
+                segments.forEach(seg => {
+                    const { id, ...rest } = seg;
+                    toAdd.push(rest);
+                });
+                modified = true;
+            }
+        });
+
+        if (!modified) {
+            alert('Alle werkuren vallen al binnen het rooster (of er zijn geen werkuren om te splitsen).');
+            return;
+        }
+
+        toDelete.forEach(id => deleteRegistration(id));
+        if (toAdd.length > 0) {
+            addRegistrations(toAdd);
         }
     };
 
@@ -314,6 +380,20 @@ export default function WeekCalendar() {
                                         <div className={`text-xl mt-1 ${isToday ? 'text-blue-600 dark:text-blue-400 font-bold' : ''}`}>
                                             {format(day, 'd')}
                                         </div>
+                                        {allowManualSplitOvertime && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleSplitDayOvertime(day, i);
+                                                }}
+                                                title="Uren van deze dag opsplitsen in overuren volgens rooster"
+                                                className="mt-1 inline-flex items-center justify-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800 transition-colors w-full max-w-[90px]"
+                                            >
+                                                <Split className="h-2.5 w-2.5" />
+                                                <span className="truncate">Splits</span>
+                                            </button>
+                                        )}
                                     </div>
                                 );
                             })}

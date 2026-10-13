@@ -40,6 +40,7 @@ db.exec(`
         approval_required TEXT DEFAULT 'none',
         custom_registration_types TEXT DEFAULT 'Werk,Pauze,Ziekte,Verlof',
         auto_split_overtime INTEGER DEFAULT 0,
+        allow_manual_split_overtime INTEGER DEFAULT 1,
         FOREIGN KEY (entity_id) REFERENCES entities(id)
     );
 
@@ -109,7 +110,8 @@ const migrations = [
     "ALTER TABLE registrations ADD COLUMN subject_id INTEGER;",
     "ALTER TABLE registrations ADD COLUMN status TEXT DEFAULT 'draft';",
     "ALTER TABLE entity_settings ADD COLUMN custom_registration_types TEXT DEFAULT 'Werk,Pauze,Ziekte,Verlof';",
-    "ALTER TABLE entity_settings ADD COLUMN auto_split_overtime INTEGER DEFAULT 0;"
+    "ALTER TABLE entity_settings ADD COLUMN auto_split_overtime INTEGER DEFAULT 0;",
+    "ALTER TABLE entity_settings ADD COLUMN allow_manual_split_overtime INTEGER DEFAULT 1;"
 ];
 
 for (const query of migrations) {

@@ -88,7 +88,7 @@ router.put('/base-schedule/:dayIndex', auth, (req, res) => {
 
 router.get('/settings', auth, (req, res) => {
     let r = db.prepare(`
-        SELECT s.*, e.time_step as e_time_step, e.allow_deviate_time_step, e.schedule_rotation_weeks, e.approval_required, e.custom_registration_types, e.auto_split_overtime 
+        SELECT s.*, e.time_step as e_time_step, e.allow_deviate_time_step, e.schedule_rotation_weeks, e.approval_required, e.custom_registration_types, e.auto_split_overtime, e.allow_manual_split_overtime 
         FROM settings s 
         LEFT JOIN users u ON s.user_id = u.id 
         LEFT JOIN entity_settings e ON u.entity_id = e.entity_id 
@@ -98,7 +98,7 @@ router.get('/settings', auth, (req, res) => {
     if (!r) {
         db.prepare('INSERT INTO settings (user_id) VALUES (?)').run(req.user.id);
         r = db.prepare(`
-            SELECT s.*, e.time_step as e_time_step, e.allow_deviate_time_step, e.schedule_rotation_weeks, e.approval_required, e.custom_registration_types, e.auto_split_overtime 
+            SELECT s.*, e.time_step as e_time_step, e.allow_deviate_time_step, e.schedule_rotation_weeks, e.approval_required, e.custom_registration_types, e.auto_split_overtime, e.allow_manual_split_overtime 
             FROM settings s 
             LEFT JOIN users u ON s.user_id = u.id 
             LEFT JOIN entity_settings e ON u.entity_id = e.entity_id 
@@ -117,6 +117,7 @@ router.get('/settings', auth, (req, res) => {
         approvalRequired: r.approval_required ?? 'none',
         customRegistrationTypes: r.custom_registration_types ?? 'Werk,Pauze,Ziekte,Verlof',
         autoSplitOvertime: !!r.auto_split_overtime,
+        allowManualSplitOvertime: r.allow_manual_split_overtime !== undefined ? !!r.allow_manual_split_overtime : true,
         defaultProjectId: r.default_project_id,
         defaultSubjectId: r.default_subject_id
     });

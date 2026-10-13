@@ -225,6 +225,15 @@ export default function Admin() {
                             <Label>Registraties buiten rooster automatisch afsplitsen naar "Overuur"</Label>
                         </div>
 
+                        <div className="space-y-2 flex items-center gap-2">
+                            <input 
+                                type="checkbox" 
+                                checked={settingsState.allow_manual_split_overtime !== undefined ? !!settingsState.allow_manual_split_overtime : true} 
+                                onChange={e => setSettingsState({...settingsState, allow_manual_split_overtime: e.target.checked ? 1 : 0})} 
+                            />
+                            <Label>Knop per dag tonen om uren manueel op te splitsen in overuren</Label>
+                        </div>
+
                         <Button onClick={() => updateEntitySettings(settingsState)}>Instellingen Opslaan</Button>
                     </CardContent>
                 </Card>

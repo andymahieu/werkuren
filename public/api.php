@@ -35,6 +35,7 @@
  *     approval_required VARCHAR(50) DEFAULT 'none',
  *     custom_registration_types TEXT,
  *     auto_split_overtime TINYINT(1) DEFAULT 0,
+ *     allow_manual_split_overtime TINYINT(1) DEFAULT 1,
  *     FOREIGN KEY (entity_id) REFERENCES entities(id)
  * );
  * 
@@ -264,7 +265,7 @@ if (preg_match('/^\/base-schedule\/(\d+)$/', $path, $m)) {
 
 if ($path === '/settings') {
     if ($method === 'GET') {
-        $stmt = $pdo->prepare("SELECT s.*, e.time_step as e_time_step, e.allow_deviate_time_step, e.schedule_rotation_weeks, e.approval_required, e.custom_registration_types, e.auto_split_overtime FROM settings s LEFT JOIN users u ON s.user_id = u.id LEFT JOIN entity_settings e ON u.entity_id = e.entity_id WHERE s.user_id = ?");
+        $stmt = $pdo->prepare("SELECT s.*, e.time_step as e_time_step, e.allow_deviate_time_step, e.schedule_rotation_weeks, e.approval_required, e.custom_registration_types, e.auto_split_overtime, e.allow_manual_split_overtime FROM settings s LEFT JOIN users u ON s.user_id = u.id LEFT JOIN entity_settings e ON u.entity_id = e.entity_id WHERE s.user_id = ?");
         $stmt->execute([$user['id']]);
         $r = $stmt->fetch();
         echo json_encode([
@@ -278,6 +279,7 @@ if ($path === '/settings') {
             "approvalRequired" => $r['approval_required'] ?? 'none',
             "customRegistrationTypes" => $r['custom_registration_types'] ?? 'Werk,Pauze,Ziekte,Verlof',
             "autoSplitOvertime" => (bool)($r['auto_split_overtime'] ?? false),
+            "allowManualSplitOvertime" => isset($r['allow_manual_split_overtime']) ? (bool)$r['allow_manual_split_overtime'] : true,
             "defaultProjectId" => $r['default_project_id'],
             "defaultSubjectId" => $r['default_subject_id']
         ]);
@@ -377,7 +379,8 @@ if (strpos($path, '/admin/') === 0) {
             }
             echo json_encode($settings);
         } elseif ($method === 'PUT') {
-            $stmt = $pdo->prepare("UPDATE entity_settings SET time_step=?, allow_deviate_time_step=?, schedule_rotation_weeks=?, approval_required=?, custom_registration_types=?, auto_split_overtime=? WHERE entity_id=?");
+            $allowManual = isset($input['allow_manual_split_overtime']) ? ($input['allow_manual_split_overtime'] ? 1 : 0) : 1;
+            $stmt = $pdo->prepare("UPDATE entity_settings SET time_step=?, allow_deviate_time_step=?, schedule_rotation_weeks=?, approval_required=?, custom_registration_types=?, auto_split_overtime=?, allow_manual_split_overtime=? WHERE entity_id=?");
             $stmt->execute([
                 $input['time_step'], 
                 $input['allow_deviate_time_step'] ? 1 : 0, 
@@ -385,6 +388,7 @@ if (strpos($path, '/admin/') === 0) {
                 $input['approval_required'], 
                 $input['custom_registration_types'],
                 $input['auto_split_overtime'] ? 1 : 0,
+                $allowManual,
                 $targetEntityId
             ]);
             echo json_encode(["ok" => true]);

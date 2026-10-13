@@ -109,13 +109,22 @@ router.get('/entity-settings', auth, requireEntityAdmin, (req, res) => {
 
 router.put('/entity-settings', auth, requireEntityAdmin, (req, res) => {
     const targetEntityId = req.user.role === 'super_admin' ? req.body.entity_id : req.user.entity_id;
-    const { time_step, allow_deviate_time_step, schedule_rotation_weeks, approval_required, custom_registration_types, auto_split_overtime } = req.body;
+    const { time_step, allow_deviate_time_step, schedule_rotation_weeks, approval_required, custom_registration_types, auto_split_overtime, allow_manual_split_overtime } = req.body;
     
     db.prepare(`
         UPDATE entity_settings 
-        SET time_step=?, allow_deviate_time_step=?, schedule_rotation_weeks=?, approval_required=?, custom_registration_types=?, auto_split_overtime=?
+        SET time_step=?, allow_deviate_time_step=?, schedule_rotation_weeks=?, approval_required=?, custom_registration_types=?, auto_split_overtime=?, allow_manual_split_overtime=?
         WHERE entity_id=?
-    `).run(time_step, allow_deviate_time_step ? 1 : 0, schedule_rotation_weeks, approval_required, custom_registration_types, auto_split_overtime ? 1 : 0, targetEntityId);
+    `).run(
+        time_step, 
+        allow_deviate_time_step ? 1 : 0, 
+        schedule_rotation_weeks, 
+        approval_required, 
+        custom_registration_types, 
+        auto_split_overtime ? 1 : 0, 
+        allow_manual_split_overtime !== undefined ? (allow_manual_split_overtime ? 1 : 0) : 1,
+        targetEntityId
+    );
     
     res.json({ ok: true });
 });
