@@ -23,7 +23,11 @@ function auth(req, res, next) {
 
 router.get('/registrations', auth, (req, res) => {
     const rows = db.prepare('SELECT * FROM registrations WHERE user_id = ?').all(req.user.id);
-    res.json(rows);
+    res.json(rows.map(r => ({
+        ...r,
+        start: (r.start || '').slice(0, 5),
+        end: (r.end || '').slice(0, 5)
+    })));
 });
 
 router.post('/registrations', auth, (req, res) => {

@@ -298,7 +298,12 @@ if ($path === '/registrations') {
     if ($method === 'GET') {
         $stmt = $pdo->prepare("SELECT * FROM registrations WHERE user_id = ?");
         $stmt->execute([$user['id']]);
-        echo json_encode($stmt->fetchAll());
+        $rows = $stmt->fetchAll();
+        echo json_encode(array_map(function($r) {
+            $r['start'] = substr($r['start'], 0, 5);
+            $r['end'] = substr($r['end'], 0, 5);
+            return $r;
+        }, $rows));
     } elseif ($method === 'POST') {
         $id = bin2hex(random_bytes(16));
         $stmt = $pdo->prepare("INSERT INTO registrations (id, user_id, date, start, end, type, description) VALUES (?,?,?,?,?,?,?)");
@@ -316,7 +321,11 @@ if ($path === '/registrations/bulk' && $method === 'POST') {
     }
     $stmt = $pdo->prepare("SELECT * FROM registrations WHERE user_id = ?");
     $stmt->execute([$user['id']]);
-    echo json_encode($stmt->fetchAll());
+    echo json_encode(array_map(function($r) {
+        $r['start'] = substr($r['start'], 0, 5);
+        $r['end'] = substr($r['end'], 0, 5);
+        return $r;
+    }, $stmt->fetchAll()));
     exit();
 }
 

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { useMemo } from 'react';
+import { formatTime, withValue } from '../lib/time';
 
 export const generateTimeOptions = (step = 30) => {
     const options = [];
@@ -135,10 +136,10 @@ export default function Settings() {
                                             <div className="flex flex-col gap-1 w-[110px]">
                                                 <select
                                                     className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                                    value={day.start}
+                                                    value={formatTime(day.start)}
                                                     onChange={(e) => handleTimeChange(index, 'start', e.target.value)}
                                                 >
-                                                    {TIME_OPTIONS.map(time => (
+                                                    {withValue(TIME_OPTIONS, day.start).map(time => (
                                                         <option key={`start-${time}`} value={time}>{time}</option>
                                                     ))}
                                                 </select>
@@ -147,10 +148,10 @@ export default function Settings() {
                                             <div className="flex flex-col gap-1 w-[110px]">
                                                 <select
                                                     className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                                    value={day.end}
+                                                    value={formatTime(day.end)}
                                                     onChange={(e) => handleTimeChange(index, 'end', e.target.value)}
                                                 >
-                                                    {TIME_OPTIONS.map(time => (
+                                                    {withValue(TIME_OPTIONS, day.end).map(time => (
                                                         <option key={`end-${time}`} value={time}>{time}</option>
                                                     ))}
                                                 </select>
@@ -176,20 +177,20 @@ export default function Settings() {
                                                     <div className="flex items-center gap-1">
                                                         <select
                                                             className="flex h-9 w-[85px] sm:w-[100px] items-center justify-between rounded-md border border-input bg-background px-2 py-1 text-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                                            value={day.breakStart || '12:00'}
+                                                            value={formatTime(day.breakStart || '12:00')}
                                                             onChange={(e) => handleTimeChange(index, 'breakStart', e.target.value)}
                                                         >
-                                                            {TIME_OPTIONS.map(time => (
+                                                            {withValue(TIME_OPTIONS, day.breakStart || '12:00').map(time => (
                                                                 <option key={`bstart-${time}`} value={time}>{time}</option>
                                                             ))}
                                                         </select>
                                                         <span className="text-muted-foreground text-xs">-</span>
                                                         <select
                                                             className="flex h-9 w-[85px] sm:w-[100px] items-center justify-between rounded-md border border-input bg-background px-2 py-1 text-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                                            value={day.breakEnd || '12:30'}
+                                                            value={formatTime(day.breakEnd || '12:30')}
                                                             onChange={(e) => handleTimeChange(index, 'breakEnd', e.target.value)}
                                                         >
-                                                            {TIME_OPTIONS.map(time => (
+                                                            {withValue(TIME_OPTIONS, day.breakEnd || '12:30').map(time => (
                                                                 <option key={`bend-${time}`} value={time}>{time}</option>
                                                             ))}
                                                         </select>

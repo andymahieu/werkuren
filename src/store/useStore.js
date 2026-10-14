@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { normalizeRegistration, normalizeScheduleDay } from '../lib/time';
 
 const isProd = window.location.hostname !== 'localhost';
 const API = isProd ? './api.php' : 'http://localhost:3001/api';
@@ -55,8 +56,8 @@ export const useStore = create((set, get) => ({
             const customRegistrationTypes = (settings.customRegistrationTypes || 'Werk,Pauze,Ziekte,Verlof').split(',').map(s => s.trim()).filter(Boolean);
 
             set({
-                registrations: Array.isArray(registrations) ? registrations : [],
-                baseSchedule: Array.isArray(baseSchedule) ? baseSchedule : [],
+                registrations: Array.isArray(registrations) ? registrations.map(normalizeRegistration) : [],
+                baseSchedule: Array.isArray(baseSchedule) ? baseSchedule.map(normalizeScheduleDay) : [],
                 overtimeBalance: settings.overtimeBalance ?? 0,
                 employeeStartDate: settings.employeeStartDate ?? '',
                 country: country,
@@ -96,23 +97,26 @@ export const useStore = create((set, get) => ({
     },
 
     // Registrations
-    addRegistration: async (reg) => {
+    addRegistration: async (rawReg) => {
+        const reg = normalizeRegistration(rawReg);
         const res = await fetch(`${API}/registrations`, {
             method: 'POST', headers: authHeaders(), body: JSON.stringify(reg),
         });
         const newReg = await res.json();
-        set(state => ({ registrations: [...state.registrations, newReg] }));
+        set(state => ({ registrations: [...state.registrations, normalizeRegistration(newReg)] }));
     },
 
-    addRegistrations: async (regs) => {
+    addRegistrations: async (rawRegs) => {
+        const regs = rawRegs.map(normalizeRegistration);
         const res = await fetch(`${API}/registrations/bulk`, {
             method: 'POST', headers: authHeaders(), body: JSON.stringify(regs),
         });
         const all = await res.json();
-        set({ registrations: all });
+        set({ registrations: Array.isArray(all) ? all.map(normalizeRegistration) : [] });
     },
 
-    updateRegistration: async (id, reg) => {
+    updateRegistration: async (id, rawReg) => {
+        const reg = normalizeRegistration(rawReg);
         await fetch(`${API}/registrations/${id}`, {
             method: 'PUT', headers: authHeaders(), body: JSON.stringify(reg),
         });
@@ -127,7 +131,8 @@ export const useStore = create((set, get) => ({
     },
 
     // Base schedule
-    updateBaseSchedule: async (dayIndex, schedule) => {
+    updateBaseSchedule: async (dayIndex, rawSchedule) => {
+        const schedule = normalizeScheduleDay(rawSchedule);
         await fetch(`${API}/base-schedule/${dayIndex}`, {
             method: 'PUT', headers: authHeaders(), body: JSON.stringify(schedule),
         });

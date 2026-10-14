@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Calendar, CalendarDays, BarChart, Settings, LogOut, User, Menu, X } from 'lucide-react';
+import { Calendar, CalendarDays, CalendarClock, BarChart, Settings, LogOut, User, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useStore } from '../store/useStore';
@@ -18,6 +18,7 @@ export default function Layout() {
     const isAdmin = user?.role === 'super_admin' || user?.role === 'entity_admin';
 
     const navigation = [
+        { name: 'Dagplanning', href: '/dag', icon: CalendarClock },
         { name: 'Weekkalender', href: '/', icon: Calendar },
         { name: 'Maandkalender', href: '/maand', icon: CalendarDays },
         { name: 'Rapportage', href: '/rapportage', icon: BarChart },
@@ -115,8 +116,8 @@ export default function Layout() {
                     </div>
                 </header>
                 
-                <div className={`flex-1 p-4 md:p-8 min-h-0 ${location.pathname === '/' || location.pathname === '/maand' ? 'overflow-hidden flex flex-col h-full' : 'overflow-auto'}`}>
-                    <div className={`max-w-7xl mx-auto w-full ${location.pathname === '/' || location.pathname === '/maand' ? 'flex-1 flex flex-col min-h-0' : ''}`}>
+                <div className={`flex-1 p-4 md:p-8 min-h-0 ${['/', '/dag', '/maand'].includes(location.pathname) ? 'overflow-hidden flex flex-col h-full' : 'overflow-auto'}`}>
+                    <div className={`max-w-7xl mx-auto w-full ${['/', '/dag', '/maand'].includes(location.pathname) ? 'flex-1 flex flex-col min-h-0' : ''}`}>
                         <Outlet />
                     </div>
                 </div>
