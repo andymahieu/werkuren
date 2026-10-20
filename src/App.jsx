@@ -6,6 +6,7 @@ import Layout from './components/Layout';
 import WeekCalendar from './pages/WeekCalendar';
 import MonthCalendar from './pages/MonthCalendar';
 import DayCalendar from './pages/DayCalendar';
+import WorkWeekCalendar from './pages/WorkWeekCalendar';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
@@ -50,6 +51,7 @@ function AppRoutes() {
       <Route path="/" element={<Layout />}>
         <Route index element={<WeekCalendar />} />
         <Route path="dag" element={<DayCalendar />} />
+        <Route path="werkweek" element={<WorkWeekCalendar />} />
         <Route path="maand" element={<MonthCalendar />} />
         <Route path="rapportage" element={<Reports />} />
         <Route path="instellingen" element={<Settings />} />

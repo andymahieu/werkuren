@@ -1,202 +1,249 @@
 import { create } from 'zustand';
 import { normalizeRegistration, normalizeScheduleDay } from '../lib/time';
+import { apiFetch } from '../lib/api';
 
-const isProd = window.location.hostname !== 'localhost';
-const API = isProd ? './api.php' : 'http://localhost:3001/api';
+const ACTIVE_ENTITY_KEY = 'wt_entity';
 
-function getToken() {
-    return localStorage.getItem('wt');
+const readActiveEntity = () => {
+    try { return Number(localStorage.getItem(ACTIVE_ENTITY_KEY)) || null; } catch { return null; }
+};
+const writeActiveEntity = (id) => {
+    try { localStorage.setItem(ACTIVE_ENTITY_KEY, String(id ?? '')); } catch { /* geen opslag */ }
+};
+
+const DEFAULT_TYPES = ['Werk', 'Pauze', 'Ziekte', 'Verlof'];
+
+const notify = (err) => {
+    console.error(err);
+    alert(err?.message || 'Er ging iets mis.');
+};
+
+// Leidt de effectieve instellingen af uit de actieve entiteit + persoonlijke instellingen
+function deriveConfig(state) {
+    const entity = state.entities.find(e => e.id === state.activeEntityId) || null;
+    const s = entity?.settings;
+    const timeStepLocked = !!s && !s.allowDeviateTimeStep;
+    return {
+        activeEntity: entity,
+        timeStep: timeStepLocked ? s.timeStep : (state.userTimeStep || s?.timeStep || 30),
+        timeStepLocked,
+        scheduleRotationWeeks: state.userRotationWeeks || s?.scheduleRotationWeeks || 2,
+        customRegistrationTypes: (s?.customRegistrationTypes || DEFAULT_TYPES.join(','))
+            .split(',').map(t => t.trim()).filter(Boolean),
+        autoSplitOvertime: !!s?.autoSplitOvertime,
+        allowManualSplitOvertime: s ? !!s.allowManualSplitOvertime : true,
+        approvalRequired: s?.approvalRequired || 'none',
+        projectMode: s?.projectMode || 'off',
+        lockDefaultProject: !!s?.lockDefaultProject,
+        projects: entity?.projects || [],
+        defaultProjectId: entity?.defaultProjectId ?? null,
+        defaultSubjectId: entity?.defaultSubjectId ?? null,
+    };
 }
 
-function authHeaders() {
-    return { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` };
-}
-
-export const useStore = create((set, get) => ({
+const EMPTY = {
     registrations: [],
     baseSchedule: [],
+    submissions: [],
     overtimeBalance: 0,
     employeeStartDate: '',
     country: 'BE',
     holidays: [],
-    entityTimeStep: 30,
-    allowDeviateTimeStep: false,
-    scheduleRotationWeeks: 2,
-    approvalRequired: 'none',
-    customRegistrationTypes: ['Werk', 'Pauze', 'Ziekte', 'Verlof'],
-    autoSplitOvertime: false,
-    allowManualSplitOvertime: true,
-    defaultProjectId: null,
-    defaultSubjectId: null,
+    userTimeStep: 30,
+    userRotationWeeks: null,
+    rotationStartDate: '',
+    entities: [],
+    activeEntityId: null,
     loaded: false,
+};
 
-    // Load all data from API
+export const useStore = create((set, get) => ({
+    ...EMPTY,
+    ...deriveConfig(EMPTY),
+
+    // Alles ophalen
     loadAll: async () => {
         try {
-            const [regsRes, schedRes, settingsRes] = await Promise.all([
-                fetch(`${API}/registrations`, { headers: authHeaders() }),
-                fetch(`${API}/base-schedule`, { headers: authHeaders() }),
-                fetch(`${API}/settings`, { headers: authHeaders() }),
+            const [me, registrations, baseSchedule, settings, submissions] = await Promise.all([
+                apiFetch('/me'),
+                apiFetch('/registrations'),
+                apiFetch('/base-schedule'),
+                apiFetch('/settings'),
+                apiFetch('/submissions').catch(() => []),
             ]);
 
-            if (regsRes.status === 401 || schedRes.status === 401 || settingsRes.status === 401) {
-                // Token expired or invalid
-                localStorage.removeItem('wt');
-                localStorage.removeItem('wu');
+            const entities = me?.entities || [];
+            const stored = readActiveEntity();
+            const activeEntityId = entities.some(e => e.id === stored)
+                ? stored
+                : (entities.find(e => e.id === me?.user?.entity_id)?.id ?? entities[0]?.id ?? null);
+
+            const next = {
+                registrations: Array.isArray(registrations) ? registrations.map(normalizeRegistration) : [],
+                baseSchedule: Array.isArray(baseSchedule) ? baseSchedule.map(normalizeScheduleDay) : [],
+                submissions: Array.isArray(submissions) ? submissions : [],
+                overtimeBalance: settings?.overtimeBalance ?? 0,
+                employeeStartDate: settings?.employeeStartDate ?? '',
+                country: settings?.country || 'BE',
+                userTimeStep: settings?.timeStep || 30,
+                userRotationWeeks: settings?.userRotationWeeks || null,
+                rotationStartDate: settings?.rotationStartDate || '',
+                entities,
+                activeEntityId,
+            };
+            set({ ...next, ...deriveConfig({ ...get(), ...next }), loaded: true });
+            get().fetchHolidays(next.country);
+        } catch (err) {
+            if (err.status === 401) {
+                try { localStorage.removeItem('wt'); localStorage.removeItem('wu'); } catch { /* */ }
                 window.location.reload();
                 return;
             }
-
-            const registrations = regsRes.ok ? await regsRes.json() : [];
-            const baseSchedule = schedRes.ok ? await schedRes.json() : [];
-            const settings = settingsRes.ok ? await settingsRes.json() : {};
-            
-            const country = settings.country || 'BE';
-            const timeStep = settings.timeStep || 30;
-            const customRegistrationTypes = (settings.customRegistrationTypes || 'Werk,Pauze,Ziekte,Verlof').split(',').map(s => s.trim()).filter(Boolean);
-
-            set({
-                registrations: Array.isArray(registrations) ? registrations.map(normalizeRegistration) : [],
-                baseSchedule: Array.isArray(baseSchedule) ? baseSchedule.map(normalizeScheduleDay) : [],
-                overtimeBalance: settings.overtimeBalance ?? 0,
-                employeeStartDate: settings.employeeStartDate ?? '',
-                country: country,
-                timeStep: timeStep,
-                entityTimeStep: settings.entityTimeStep || 30,
-                allowDeviateTimeStep: !!settings.allowDeviateTimeStep,
-                scheduleRotationWeeks: settings.scheduleRotationWeeks || 2,
-                approvalRequired: settings.approvalRequired || 'none',
-                customRegistrationTypes,
-                autoSplitOvertime: !!settings.autoSplitOvertime,
-                allowManualSplitOvertime: settings.allowManualSplitOvertime !== undefined ? !!settings.allowManualSplitOvertime : true,
-                defaultProjectId: settings.defaultProjectId,
-                defaultSubjectId: settings.defaultSubjectId,
-                loaded: true,
-            });
-
-            // Fetch holidays after setting country
-            get().fetchHolidays(country);
-        } catch (err) {
-            console.error("Fout bij laden van data:", err);
-            // Zorg dat we niet oneindig blijven hangen op 'Data laden...'
+            console.error('Fout bij laden van data:', err);
+            // Nooit blijven hangen op 'Data laden...'
             set({ loaded: true });
         }
+    },
+
+    setActiveEntity: (id) => {
+        writeActiveEntity(id);
+        set(state => {
+            const next = { ...state, activeEntityId: id };
+            return { activeEntityId: id, ...deriveConfig(next) };
+        });
     },
 
     fetchHolidays: async (country) => {
         try {
             const year = new Date().getFullYear();
-            const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${country}`);
-            if (res.ok) {
-                const holidays = await res.json();
-                set({ holidays });
-            }
+            const results = await Promise.all([year - 1, year, year + 1].map(y =>
+                fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/${country}`)
+                    .then(r => (r.ok ? r.json() : []))
+                    .catch(() => [])
+            ));
+            set({ holidays: results.flat() });
         } catch (err) {
-            console.error("Failed to fetch holidays", err);
+            console.error('Failed to fetch holidays', err);
         }
     },
 
-    // Registrations
+    // Registraties
+    reloadRegistrations: async () => {
+        const regs = await apiFetch('/registrations');
+        set({ registrations: Array.isArray(regs) ? regs.map(normalizeRegistration) : [] });
+    },
+
     addRegistration: async (rawReg) => {
-        const reg = normalizeRegistration(rawReg);
-        const res = await fetch(`${API}/registrations`, {
-            method: 'POST', headers: authHeaders(), body: JSON.stringify(reg),
-        });
-        const newReg = await res.json();
-        set(state => ({ registrations: [...state.registrations, normalizeRegistration(newReg)] }));
+        try {
+            const newReg = await apiFetch('/registrations', { method: 'POST', body: normalizeRegistration(rawReg) });
+            set(state => ({ registrations: [...state.registrations, normalizeRegistration(newReg)] }));
+            return true;
+        } catch (err) { notify(err); return false; }
     },
 
     addRegistrations: async (rawRegs) => {
-        const regs = rawRegs.map(normalizeRegistration);
-        const res = await fetch(`${API}/registrations/bulk`, {
-            method: 'POST', headers: authHeaders(), body: JSON.stringify(regs),
-        });
-        const all = await res.json();
-        set({ registrations: Array.isArray(all) ? all.map(normalizeRegistration) : [] });
+        try {
+            const all = await apiFetch('/registrations/bulk', { method: 'POST', body: rawRegs.map(normalizeRegistration) });
+            set({ registrations: Array.isArray(all) ? all.map(normalizeRegistration) : [] });
+            return true;
+        } catch (err) { notify(err); return false; }
     },
 
     updateRegistration: async (id, rawReg) => {
-        const reg = normalizeRegistration(rawReg);
-        await fetch(`${API}/registrations/${id}`, {
-            method: 'PUT', headers: authHeaders(), body: JSON.stringify(reg),
-        });
-        set(state => ({
-            registrations: state.registrations.map(r => r.id === id ? { ...r, ...reg } : r),
-        }));
+        try {
+            const updated = await apiFetch(`/registrations/${id}`, { method: 'PUT', body: normalizeRegistration(rawReg) });
+            set(state => ({
+                registrations: state.registrations.map(r => (r.id === id ? normalizeRegistration(updated) : r)),
+            }));
+            return true;
+        } catch (err) { notify(err); return false; }
     },
 
     deleteRegistration: async (id) => {
-        await fetch(`${API}/registrations/${id}`, { method: 'DELETE', headers: authHeaders() });
-        set(state => ({ registrations: state.registrations.filter(r => r.id !== id) }));
+        try {
+            await apiFetch(`/registrations/${id}`, { method: 'DELETE' });
+            set(state => ({ registrations: state.registrations.filter(r => r.id !== id) }));
+            return true;
+        } catch (err) { notify(err); return false; }
     },
 
-    // Base schedule
+    // Indienen ter goedkeuring
+    submitPeriod: async (periodType, periodStart, periodEnd) => {
+        try {
+            await apiFetch('/submissions', {
+                method: 'POST',
+                body: { entity_id: get().activeEntityId, period_type: periodType, period_start: periodStart, period_end: periodEnd },
+            });
+            const [subs] = await Promise.all([apiFetch('/submissions'), get().reloadRegistrations()]);
+            set({ submissions: subs });
+            return true;
+        } catch (err) { notify(err); return false; }
+    },
+
+    withdrawSubmission: async (id) => {
+        try {
+            await apiFetch(`/submissions/${id}`, { method: 'DELETE' });
+            const [subs] = await Promise.all([apiFetch('/submissions'), get().reloadRegistrations()]);
+            set({ submissions: subs });
+            return true;
+        } catch (err) { notify(err); return false; }
+    },
+
+    // Basisrooster
     updateBaseSchedule: async (dayIndex, rawSchedule) => {
         const schedule = normalizeScheduleDay(rawSchedule);
-        await fetch(`${API}/base-schedule/${dayIndex}`, {
-            method: 'PUT', headers: authHeaders(), body: JSON.stringify(schedule),
-        });
         set(state => {
             const newSchedule = [...state.baseSchedule];
             newSchedule[dayIndex] = { ...newSchedule[dayIndex], ...schedule };
             return { baseSchedule: newSchedule };
         });
+        try {
+            await apiFetch(`/base-schedule/${dayIndex}`, { method: 'PUT', body: schedule });
+        } catch (err) { notify(err); }
     },
 
-    // Settings
-    setOvertimeBalance: async (balance) => {
-        const safeBalance = isNaN(Number(balance)) ? 0 : Number(balance);
-        set(state => {
-            fetch(`${API}/settings`, {
-                method: 'PUT', headers: authHeaders(),
-                body: JSON.stringify({ overtimeBalance: safeBalance, employeeStartDate: state.employeeStartDate, country: state.country, timeStep: state.timeStep }),
-            });
-            return { overtimeBalance: safeBalance };
-        });
+    // Persoonlijke instellingen (enkel de gewijzigde velden worden verstuurd)
+    saveSettings: async (partial) => {
+        try {
+            await apiFetch('/settings', { method: 'PUT', body: partial });
+        } catch (err) { notify(err); }
     },
 
-    setEmployeeStartDate: async (date) => {
-        set(state => {
-            fetch(`${API}/settings`, {
-                method: 'PUT', headers: authHeaders(),
-                body: JSON.stringify({ overtimeBalance: state.overtimeBalance, employeeStartDate: date, country: state.country, timeStep: state.timeStep }),
-            });
-            return { employeeStartDate: date };
-        });
+    setOvertimeBalance: (balance) => {
+        const safe = isNaN(Number(balance)) ? 0 : Number(balance);
+        set({ overtimeBalance: safe });
+        get().saveSettings({ overtimeBalance: safe });
     },
 
-    setCountry: async (country) => {
-        set(state => {
-            fetch(`${API}/settings`, {
-                method: 'PUT', headers: authHeaders(),
-                body: JSON.stringify({ overtimeBalance: state.overtimeBalance, employeeStartDate: state.employeeStartDate, country, timeStep: state.timeStep }),
-            });
-            return { country };
-        });
+    addOvertime: (hours) => {
+        const next = get().overtimeBalance + hours;
+        set({ overtimeBalance: next });
+        get().saveSettings({ overtimeBalance: next });
+    },
+
+    setEmployeeStartDate: (date) => {
+        set({ employeeStartDate: date });
+        get().saveSettings({ employeeStartDate: date });
+    },
+
+    setCountry: (country) => {
+        set({ country });
+        get().saveSettings({ country });
         get().fetchHolidays(country);
     },
 
-    addOvertime: async (hours) => {
-        set(state => {
-            const newBalance = state.overtimeBalance + hours;
-            fetch(`${API}/settings`, {
-                method: 'PUT', headers: authHeaders(),
-                body: JSON.stringify({ overtimeBalance: newBalance, employeeStartDate: state.employeeStartDate, country: state.country, timeStep: state.timeStep }),
-            });
-            return { overtimeBalance: newBalance };
-        });
+    setTimeStep: (timeStep) => {
+        set(state => ({ userTimeStep: timeStep, ...deriveConfig({ ...state, userTimeStep: timeStep }) }));
+        get().saveSettings({ timeStep });
     },
 
-    setTimeStep: async (timeStep) => {
+    setRotation: (weeks, startDate) => {
         set(state => {
-            fetch(`${API}/settings`, {
-                method: 'PUT', headers: authHeaders(),
-                body: JSON.stringify({ overtimeBalance: state.overtimeBalance, employeeStartDate: state.employeeStartDate, country: state.country, timeStep }),
-            });
-            return { timeStep };
+            const next = { ...state, userRotationWeeks: weeks || null, rotationStartDate: startDate ?? state.rotationStartDate };
+            return { userRotationWeeks: next.userRotationWeeks, rotationStartDate: next.rotationStartDate, ...deriveConfig(next) };
         });
+        get().saveSettings({ userRotationWeeks: weeks || null, rotationStartDate: startDate ?? get().rotationStartDate });
     },
 
-    // Reset store on logout
-    reset: () => set({ registrations: [], baseSchedule: [], overtimeBalance: 0, employeeStartDate: '', country: 'BE', timeStep: 30, holidays: [], loaded: false }),
+    reset: () => set({ ...EMPTY, ...deriveConfig(EMPTY) }),
 }));

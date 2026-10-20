@@ -5,11 +5,12 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { calculateDuration, calculateExpectedDuration } from '../lib/utils';
-import { startOfWeek, endOfWeek, eachDayOfInterval, getISOWeek, format, startOfMonth, endOfMonth, subWeeks, subMonths } from 'date-fns';
+import { getScheduleForDate, isBreakType } from '../lib/schedule';
+import { startOfWeek, endOfWeek, eachDayOfInterval, format, startOfMonth, endOfMonth, subWeeks, subMonths } from 'date-fns';
 import { nl } from 'date-fns/locale';
 
 export default function Reports() {
-    const { overtimeBalance, setOvertimeBalance, addOvertime, registrations, baseSchedule, employeeStartDate } = useStore();
+    const { overtimeBalance, setOvertimeBalance, registrations, baseSchedule, employeeStartDate, scheduleRotationWeeks, rotationStartDate } = useStore();
     const [balanceInput, setBalanceInput] = useState(overtimeBalance.toString());
 
     // Effective start: parse the stored date string, or null when not set
@@ -30,13 +31,7 @@ export default function Reports() {
 
         days.forEach(day => {
             // expected
-            const weekNumber = getISOWeek(day);
-            const isWeek2 = weekNumber % 2 !== 0;
-            let dayIndex = day.getDay() - 1;
-            if (dayIndex < 0) dayIndex = 6;
-
-            const scheduleIndex = isWeek2 ? dayIndex + 7 : dayIndex;
-            const baseDay = baseSchedule[scheduleIndex];
+            const baseDay = getScheduleForDate(day, baseSchedule, scheduleRotationWeeks, rotationStartDate);
             const ex = baseDay?.active ? calculateExpectedDuration(baseDay) : 0;
             expected += ex;
 
@@ -45,7 +40,7 @@ export default function Reports() {
             const dayRegs = registrations.filter(r => r.date === dateStr);
             let dayTotal = 0;
             dayRegs.forEach(reg => {
-                if (reg.type !== 'pauze') {
+                if (!isBreakType(reg.type)) {
                     dayTotal += calculateDuration(reg.start, reg.end);
                 }
             });

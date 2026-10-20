@@ -1,8 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { API } from '../lib/api';
 
 const AuthContext = createContext(null);
-const isProd = window.location.hostname !== 'localhost';
-const API = isProd ? './api.php' : 'http://localhost:3001/api';
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
@@ -12,12 +11,15 @@ export function AuthProvider({ children }) {
     useEffect(() => {
         // Validate token on load
         if (token) {
-            fetch(`${API}/settings`, { headers: { Authorization: `Bearer ${token}` } })
-                .then(r => {
+            fetch(`${API}/me`, { headers: { Authorization: `Bearer ${token}` } })
+                .then(async r => {
                     if (!r.ok) throw new Error();
-                    // Token valid – restore user from stored data
-                    const stored = localStorage.getItem('wu');
-                    if (stored) setUser(JSON.parse(stored));
+                    // Token geldig: gebruiker (met actuele rol) uit de databank halen
+                    const data = await r.json();
+                    const fresh = data?.user;
+                    if (!fresh) throw new Error();
+                    localStorage.setItem('wu', JSON.stringify(fresh));
+                    setUser(fresh);
                 })
                 .catch(() => {
                     localStorage.removeItem('wt');

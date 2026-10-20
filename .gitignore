@@ -28,3 +28,6 @@ dist-ssr
 *.db-shm
 *.db-wal
 Werkuren_app/
+
+# Server-configuratie (wachtwoorden)
+config.php

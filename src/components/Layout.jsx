@@ -1,13 +1,18 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Calendar, CalendarDays, CalendarClock, BarChart, Settings, LogOut, User, Menu, X } from 'lucide-react';
+import { Calendar, CalendarDays, CalendarClock, CalendarRange, BarChart, Settings, LogOut, User, Menu, X, Building2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useStore } from '../store/useStore';
+
+const CALENDAR_PATHS = ['/', '/dag', '/werkweek', '/maand'];
 
 export default function Layout() {
     const location = useLocation();
     const { user, logout } = useAuth();
     const reset = useStore(s => s.reset);
+    const entities = useStore(s => s.entities);
+    const activeEntityId = useStore(s => s.activeEntityId);
+    const setActiveEntity = useStore(s => s.setActiveEntity);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const handleLogout = () => {
@@ -19,6 +24,7 @@ export default function Layout() {
 
     const navigation = [
         { name: 'Dagplanning', href: '/dag', icon: CalendarClock },
+        { name: 'Werkweek', href: '/werkweek', icon: CalendarRange },
         { name: 'Weekkalender', href: '/', icon: Calendar },
         { name: 'Maandkalender', href: '/maand', icon: CalendarDays },
         { name: 'Rapportage', href: '/rapportage', icon: BarChart },
@@ -77,6 +83,25 @@ export default function Layout() {
                     })}
                 </nav>
 
+                {/* Actieve entiteit (bij meerdere entiteiten) */}
+                {entities.length > 1 && (
+                    <div className="px-4 pb-3">
+                        <label htmlFor="active-entity" className="flex items-center gap-1 text-xs font-medium text-slate-500 mb-1">
+                            <Building2 className="h-3.5 w-3.5" /> Ik werk voor
+                        </label>
+                        <select
+                            id="active-entity"
+                            value={activeEntityId ?? ''}
+                            onChange={(e) => setActiveEntity(Number(e.target.value))}
+                            className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
+                        >
+                            {entities.map(en => (
+                                <option key={en.id} value={en.id}>{en.companyName ? `${en.companyName} - ` : ''}{en.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
                 {/* User info + logout */}
                 <div className="p-4 border-t dark:border-slate-700">
                     <div className="flex items-center gap-3 mb-3 px-2">
@@ -116,8 +141,8 @@ export default function Layout() {
                     </div>
                 </header>
                 
-                <div className={`flex-1 p-4 md:p-8 min-h-0 ${['/', '/dag', '/maand'].includes(location.pathname) ? 'overflow-hidden flex flex-col h-full' : 'overflow-auto'}`}>
-                    <div className={`max-w-7xl mx-auto w-full ${['/', '/dag', '/maand'].includes(location.pathname) ? 'flex-1 flex flex-col min-h-0' : ''}`}>
+                <div className={`flex-1 p-4 md:p-8 min-h-0 ${CALENDAR_PATHS.includes(location.pathname) ? 'overflow-hidden flex flex-col h-full' : 'overflow-auto'}`}>
+                    <div className={`max-w-7xl mx-auto w-full ${CALENDAR_PATHS.includes(location.pathname) ? 'flex-1 flex flex-col min-h-0' : ''}`}>
                         <Outlet />
                     </div>
                 </div>
